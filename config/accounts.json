@@ -1,0 +1,73 @@
+{
+  "priority_accounts": [
+    {
+      "username": "levelsio",
+      "niche": "indie hackers",
+      "followers": "500k+",
+      "priority": "high"
+    },
+    {
+      "username": "naval",
+      "niche": "startups/philosophy",
+      "followers": "2M+",
+      "priority": "high"
+    },
+    {
+      "username": "paulg",
+      "niche": "startups/YC",
+      "followers": "1.5M+",
+      "priority": "high"
+    },
+    {
+      "username": "sama",
+      "niche": "AI/OpenAI",
+      "followers": "3M+",
+      "priority": "high"
+    },
+    {
+      "username": "elonmusk",
+      "niche": "tech/general",
+      "followers": "150M+",
+      "priority": "medium"
+    },
+    {
+      "username": "dhaborimof",
+      "niche": "startups",
+      "followers": "100k+",
+      "priority": "high"
+    },
+    {
+      "username": "andrewchen",
+      "niche": "growth/startups",
+      "followers": "700k+",
+      "priority": "high"
+    },
+    {
+      "username": "pmarca",
+      "niche": "tech/VC",
+      "followers": "1M+",
+      "priority": "medium"
+    },
+    {
+      "username": "swyx",
+      "niche": "AI/dev",
+      "followers": "100k+",
+      "priority": "high"
+    },
+    {
+      "username": "emaborimof",
+      "niche": "crypto/startups",
+      "followers": "200k+",
+      "priority": "high"
+    }
+  ],
+  "niches": ["AI", "startups", "crypto", "dev tools", "indie hackers"],
+  "filters": {
+    "min_likes": 100,
+    "max_replies": 50,
+    "max_age_hours": 4,
+    "prefer_questions": true,
+    "prefer_opinions": true
+  },
+  "search_interval_minutes": 120
+}

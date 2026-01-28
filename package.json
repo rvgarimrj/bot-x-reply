@@ -1,0 +1,22 @@
+{
+  "name": "bot-x-reply",
+  "version": "1.0.0",
+  "description": "Sistema inteligente de engajamento no X via replies",
+  "type": "module",
+  "main": "scripts/reply-bot.js",
+  "scripts": {
+    "start": "node scripts/reply-bot.js",
+    "search": "node scripts/search-daemon.js",
+    "test:integration": "node scripts/test-integration.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "dotenv": "^17.2.3",
+    "node-telegram-bot-api": "^0.67.0",
+    "puppeteer-core": "^24.36.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
