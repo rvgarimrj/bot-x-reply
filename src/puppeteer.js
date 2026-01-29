@@ -47,13 +47,16 @@ async function safeClosePage(browser, page) {
   try {
     const pages = await browser.pages()
     if (pages.length > 1) {
-      await safeClosePage(browser, page)
+      // Tem mais de uma aba, pode fechar
+      console.log(`Fechando aba (${pages.length} abas abertas)`)
+      await page.close()
     } else {
-      // Se for única aba, volta pro home ao invés de fechar
+      // É a última aba, volta pro home ao invés de fechar
+      console.log('Última aba, navegando pro home ao invés de fechar')
       await page.goto('https://x.com/home', { waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {})
     }
   } catch (e) {
-    // Ignora erros ao fechar
+    console.log('Erro ao fechar aba:', e.message)
   }
 }
 
