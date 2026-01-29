@@ -12,7 +12,7 @@
  */
 
 import 'dotenv/config'
-import { readFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import telegram from '../src/telegram.js'
@@ -31,8 +31,9 @@ import {
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
-// Arquivo compartilhado com o daemon de busca
+// Arquivos compartilhados com o daemon de busca
 const SHARED_SUGGESTIONS_FILE = join(__dirname, '../.suggestions.json')
+const INTERACTION_FILE = join(__dirname, '../.user-interaction.json')
 
 // Estado do bot
 const state = {
@@ -41,6 +42,21 @@ const state = {
   currentRecommendation: null,
   awaitingEdit: false,
   foundTweets: [] // Tweets encontrados pelo /buscar
+}
+
+/**
+ * Sinaliza que o usuário interagiu (para cancelar auto-reply)
+ */
+function signalUserInteraction() {
+  try {
+    writeFileSync(INTERACTION_FILE, JSON.stringify({
+      timestamp: Date.now(),
+      action: 'user_clicked'
+    }))
+    console.log('📝 Interação do usuário registrada (auto-reply cancelado)')
+  } catch (e) {
+    // Ignora erros
+  }
 }
 
 /**
@@ -247,6 +263,9 @@ async function handleCallback(query) {
     handlePostReply(index)
   }
   else if (data.startsWith('select_found_')) {
+    // Sinaliza interação do usuário (cancela auto-reply)
+    signalUserInteraction()
+
     // Selecionou um tweet da busca - usa dados que já temos
     const index = parseInt(data.split('_')[2])
 
@@ -267,6 +286,7 @@ async function handleCallback(query) {
     }
   }
   else if (data === 'search_again') {
+    signalUserInteraction()
     handleSearchTweets()
   }
   else if (data === 'edit') {
@@ -280,6 +300,7 @@ async function handleCallback(query) {
     }
   }
   else if (data === 'cancel') {
+    signalUserInteraction()
     state.currentTweet = null
     state.currentReplies = []
     state.awaitingEdit = false

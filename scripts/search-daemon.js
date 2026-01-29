@@ -11,7 +11,7 @@
  */
 
 import 'dotenv/config'
-import { writeFileSync } from 'fs'
+import { writeFileSync, readFileSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import telegram from '../src/telegram.js'
@@ -24,8 +24,9 @@ import { postReply } from '../src/puppeteer.js'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
-// Arquivo compartilhado para sincronizar com o bot principal
+// Arquivos compartilhados para sincronizar com o bot principal
 const SHARED_SUGGESTIONS_FILE = join(__dirname, '../.suggestions.json')
+const INTERACTION_FILE = join(__dirname, '../.user-interaction.json')
 
 // Configurações
 const CONFIG = {
@@ -109,9 +110,35 @@ function formatTimeUntil(date) {
 }
 
 /**
+ * Verifica se usuário interagiu desde o envio das sugestões
+ */
+function userHasInteracted() {
+  try {
+    if (existsSync(INTERACTION_FILE)) {
+      const data = JSON.parse(readFileSync(INTERACTION_FILE, 'utf-8'))
+      // Se interação foi depois do envio das sugestões, usuário interagiu
+      if (data.timestamp && suggestionSentAt && data.timestamp > suggestionSentAt) {
+        return true
+      }
+    }
+  } catch (e) {
+    // Ignora erros
+  }
+  return false
+}
+
+/**
  * Auto-reply: posta automaticamente o melhor reply após timeout
  */
 async function autoReplyBest() {
+  // Verifica se usuário já interagiu
+  if (userHasInteracted()) {
+    console.log('⏰ Auto-reply cancelado: usuário já interagiu')
+    pendingSuggestions = []
+    suggestionSentAt = null
+    return
+  }
+
   if (!pendingSuggestions || pendingSuggestions.length === 0) {
     console.log('⏰ Auto-reply: sem sugestões pendentes')
     return
@@ -367,18 +394,9 @@ async function main() {
     process.exit(1)
   }
 
-  // Inicializa Telegram com polling para receber callbacks
-  telegram.initBot({ polling: true })
+  // Inicializa Telegram SEM polling (o bot principal faz polling)
+  telegram.initBot({ polling: false })
   telegram.setChatId(process.env.TELEGRAM_CHAT_ID)
-
-  // Handler para cancelar auto-reply quando usuário interage
-  telegram.onCallback((query) => {
-    const data = query.data
-    // Se usuário clicou em qualquer botão da sugestão, cancela auto-reply
-    if (data.startsWith('select_found_') || data === 'search_again' || data === 'cancel') {
-      cancelAutoReplyTimer()
-    }
-  })
 
   isRunning = true
 
