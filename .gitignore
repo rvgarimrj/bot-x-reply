@@ -38,3 +38,6 @@ screenshots/
 # Runtime data
 data/
 .suggestions.json
+
+# Logs
+logs/
