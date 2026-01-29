@@ -309,12 +309,13 @@ export async function postReply(url, replyText) {
       throw new Error('Não encontrei o campo de reply')
     }
 
-    // Clica no botão de postar
-    console.log('Postando...')
+    // Clica no botão de postar/responder
+    console.log('Procurando botão de postar...')
+
+    // Primeiro tenta os seletores padrão
     const postSelectors = [
       '[data-testid="tweetButtonInline"]',
-      '[data-testid="tweetButton"]',
-      'button[type="submit"]'
+      '[data-testid="tweetButton"]'
     ]
 
     let posted = false
@@ -322,19 +323,76 @@ export async function postReply(url, replyText) {
       try {
         const btn = await page.$(sel)
         if (btn) {
-          console.log(`Encontrado botão: ${sel}`)
-          await humanClick(page, sel)
-          posted = true
-          console.log('Botão clicado!')
-          break
+          // Verifica se o botão está habilitado (não está disabled)
+          const isDisabled = await page.evaluate(el => el.disabled || el.getAttribute('aria-disabled') === 'true', btn)
+          if (!isDisabled) {
+            console.log(`Encontrado botão habilitado: ${sel}`)
+            await humanClick(page, sel)
+            posted = true
+            console.log('Botão clicado!')
+            break
+          } else {
+            console.log(`Botão ${sel} encontrado mas desabilitado`)
+          }
         }
       } catch (e) {
-        console.log(`Botão ${sel} não encontrado ou erro: ${e.message}`)
+        console.log(`Botão ${sel} não encontrado: ${e.message}`)
+      }
+    }
+
+    // Se não encontrou pelos seletores, tenta encontrar pelo texto
+    if (!posted) {
+      console.log('Tentando encontrar botão pelo texto...')
+      try {
+        // Procura botão com texto "Reply", "Responder", "Post" ou similar
+        const btnByText = await page.evaluate(() => {
+          const buttons = Array.from(document.querySelectorAll('button, [role="button"]'))
+          for (const btn of buttons) {
+            const text = btn.textContent?.toLowerCase() || ''
+            const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || ''
+            if (text.includes('reply') || text.includes('responder') ||
+                text.includes('post') || text.includes('postar') ||
+                ariaLabel.includes('reply') || ariaLabel.includes('post')) {
+              // Verifica se está visível e não desabilitado
+              const style = window.getComputedStyle(btn)
+              if (style.display !== 'none' && style.visibility !== 'hidden' && !btn.disabled) {
+                return true
+              }
+            }
+          }
+          return false
+        })
+
+        if (btnByText) {
+          // Clica no botão encontrado
+          await page.evaluate(() => {
+            const buttons = Array.from(document.querySelectorAll('button, [role="button"]'))
+            for (const btn of buttons) {
+              const text = btn.textContent?.toLowerCase() || ''
+              const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || ''
+              if (text.includes('reply') || text.includes('responder') ||
+                  text.includes('post') || text.includes('postar') ||
+                  ariaLabel.includes('reply') || ariaLabel.includes('post')) {
+                const style = window.getComputedStyle(btn)
+                if (style.display !== 'none' && style.visibility !== 'hidden' && !btn.disabled) {
+                  btn.click()
+                  return
+                }
+              }
+            }
+          })
+          posted = true
+          console.log('Botão encontrado por texto e clicado!')
+        }
+      } catch (e) {
+        console.log('Erro ao buscar botão por texto:', e.message)
       }
     }
 
     if (!posted) {
-      console.error('ERRO: Nenhum botão de post encontrado!')
+      // Última tentativa: screenshot para debug
+      await page.screenshot({ path: '/tmp/debug_no_button.png' })
+      console.error('ERRO: Nenhum botão de post encontrado! Screenshot salvo em /tmp/debug_no_button.png')
       throw new Error('Não encontrei o botão de postar reply')
     }
 
