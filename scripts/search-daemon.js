@@ -16,8 +16,10 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import telegram from '../src/telegram.js'
 import { findBestTweets, formatTweetCard } from '../src/tweet-finder.js'
-import { getDailyStats, canPostMore } from '../src/finder.js'
-import { cleanOldData } from '../src/knowledge.js'
+import { getDailyStats, canPostMore, recordReply } from '../src/finder.js'
+import { cleanOldData, recordPostedReply } from '../src/knowledge.js'
+import { generateReplies } from '../src/claude.js'
+import { postReply } from '../src/puppeteer.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -39,6 +41,11 @@ const CONFIG = {
 let isRunning = false
 let lastSearchTime = null
 let pendingSuggestions = []
+let suggestionSentAt = null
+let autoReplyTimeout = null
+
+// Configuração de auto-reply
+const AUTO_REPLY_MINUTES = 10 // Minutos sem resposta para auto-reply
 
 /**
  * Verifica se está dentro do horário de trabalho
@@ -99,6 +106,124 @@ function formatTimeUntil(date) {
     return `${hours}h ${minutes}min`
   }
   return `${minutes}min`
+}
+
+/**
+ * Auto-reply: posta automaticamente o melhor reply após timeout
+ */
+async function autoReplyBest() {
+  if (!pendingSuggestions || pendingSuggestions.length === 0) {
+    console.log('⏰ Auto-reply: sem sugestões pendentes')
+    return
+  }
+
+  // Encontra o melhor tweet (maior score)
+  const bestIndex = pendingSuggestions.reduce((best, t, i) =>
+    t.score > pendingSuggestions[best].score ? i : best, 0)
+
+  const tweet = pendingSuggestions[bestIndex]
+
+  console.log(`⏰ Auto-reply: ${AUTO_REPLY_MINUTES}min sem resposta, postando automaticamente...`)
+  console.log(`📝 Tweet de @${tweet.author} (score: ${tweet.score})`)
+
+  try {
+    // Verifica se ainda pode postar
+    if (!canPostMore()) {
+      console.log('⚠️ Auto-reply cancelado: limite diário atingido')
+      await telegram.sendMessage('⚠️ Auto-reply cancelado: limite diário atingido')
+      return
+    }
+
+    // Gera replies
+    await telegram.sendMessage(`⏰ <b>Auto-reply ativado!</b>\n\n${AUTO_REPLY_MINUTES}min sem resposta.\nPostando no tweet de @${tweet.author}...`)
+
+    const result = await generateReplies(tweet.text, tweet.author)
+
+    if (!result.success || result.replies.length === 0) {
+      console.log('❌ Auto-reply: erro ao gerar replies')
+      return
+    }
+
+    // Usa o primeiro reply (mais direto)
+    const reply = result.replies[0]
+
+    // Posta via Puppeteer
+    const postResult = await postReply(tweet.url, reply)
+
+    if (postResult.success) {
+      recordReply(tweet.url)
+      recordPostedReply({
+        tweetUrl: tweet.url,
+        tweetAuthor: tweet.author,
+        tweetText: tweet.text,
+        replyText: reply,
+        replyIndex: 1,
+        wasRecommended: true
+      })
+
+      const stats = getDailyStats()
+
+      if (postResult.screenshot) {
+        await telegram.sendPhoto(postResult.screenshot,
+          `✅ <b>Auto-reply postado!</b>\n\n` +
+          `📝 @${tweet.author}\n` +
+          `💬 "${reply}"\n\n` +
+          `📊 Replies hoje: ${stats.repliesPosted}/10`
+        )
+      } else {
+        await telegram.sendMessage(
+          `✅ <b>Auto-reply postado!</b>\n\n` +
+          `📝 @${tweet.author}\n` +
+          `💬 "${reply}"\n\n` +
+          `📊 Replies hoje: ${stats.repliesPosted}/10`
+        )
+      }
+
+      console.log('✅ Auto-reply postado com sucesso!')
+    } else {
+      await telegram.sendMessage(`❌ Auto-reply falhou: ${postResult.error}`)
+    }
+
+  } catch (error) {
+    console.error('❌ Erro no auto-reply:', error.message)
+    await telegram.sendMessage(`❌ Erro no auto-reply: ${error.message}`)
+  }
+
+  // Limpa sugestões pendentes
+  pendingSuggestions = []
+  suggestionSentAt = null
+}
+
+/**
+ * Inicia timer de auto-reply
+ */
+function startAutoReplyTimer() {
+  // Cancela timer anterior se existir
+  if (autoReplyTimeout) {
+    clearTimeout(autoReplyTimeout)
+  }
+
+  suggestionSentAt = Date.now()
+
+  // Agenda auto-reply
+  autoReplyTimeout = setTimeout(() => {
+    autoReplyBest()
+  }, AUTO_REPLY_MINUTES * 60 * 1000)
+
+  console.log(`⏰ Auto-reply agendado para ${AUTO_REPLY_MINUTES}min`)
+}
+
+/**
+ * Cancela timer de auto-reply (quando usuário interage)
+ */
+function cancelAutoReplyTimer() {
+  if (autoReplyTimeout) {
+    clearTimeout(autoReplyTimeout)
+    autoReplyTimeout = null
+    console.log('⏰ Auto-reply cancelado (usuário interagiu)')
+  }
+  pendingSuggestions = []
+  suggestionSentAt = null
 }
 
 /**
@@ -174,6 +299,9 @@ async function runSearch() {
     console.log(`✅ Notificado: ${tweets.length} tweets`)
     lastSearchTime = Date.now()
 
+    // Inicia timer de auto-reply
+    startAutoReplyTimer()
+
   } catch (error) {
     console.error('❌ Erro na busca:', error.message)
 
@@ -239,9 +367,18 @@ async function main() {
     process.exit(1)
   }
 
-  // Inicializa Telegram
-  telegram.initBot({ polling: false })
+  // Inicializa Telegram com polling para receber callbacks
+  telegram.initBot({ polling: true })
   telegram.setChatId(process.env.TELEGRAM_CHAT_ID)
+
+  // Handler para cancelar auto-reply quando usuário interage
+  telegram.onCallback((query) => {
+    const data = query.data
+    // Se usuário clicou em qualquer botão da sugestão, cancela auto-reply
+    if (data.startsWith('select_found_') || data === 'search_again' || data === 'cancel') {
+      cancelAutoReplyTimer()
+    }
+  })
 
   isRunning = true
 
