@@ -1,0 +1,1 @@
+leia o arquivo /docs/implementacoes/prd21012026.md que esta no diretorio docs/implementacoes, e gere a especificao completa do que precisa ser feito, que arquivos criar/modificar, o que precisa ser criado e modificado na aplicacao e gere um arquivo spec.md+timestamp(formato specDDMMAAAA_HH-MM.md) na pasta docs/implementacoes com tudo que é preciso.

@@ -317,19 +317,46 @@ export async function postReply(url, replyText) {
       'button[type="submit"]'
     ]
 
+    let posted = false
     for (const sel of postSelectors) {
       try {
-        await humanClick(page, sel)
-        break
-      } catch {}
+        const btn = await page.$(sel)
+        if (btn) {
+          console.log(`Encontrado botão: ${sel}`)
+          await humanClick(page, sel)
+          posted = true
+          console.log('Botão clicado!')
+          break
+        }
+      } catch (e) {
+        console.log(`Botão ${sel} não encontrado ou erro: ${e.message}`)
+      }
     }
 
-    // Aguarda confirmação
+    if (!posted) {
+      console.error('ERRO: Nenhum botão de post encontrado!')
+      throw new Error('Não encontrei o botão de postar reply')
+    }
+
+    // Aguarda o reply ser enviado (modal fecha ou desaparece)
+    console.log('Aguardando confirmação do envio...')
     await humanDelay(HUMAN_CONFIG.delays.afterPost)
+
+    // Aguarda mais um pouco para garantir que o modal fechou
+    await page.waitForFunction(() => {
+      // Verifica se o modal de reply ainda está aberto
+      const modal = document.querySelector('[data-testid="tweetButtonInline"]')
+      return !modal // Retorna true quando o modal fechou
+    }, { timeout: 10000 }).catch(() => {
+      console.log('Modal pode ainda estar aberto, continuando...')
+    })
+
+    await humanDelay({ min: 1500, max: 2500 })
 
     // Tira screenshot de confirmação
     const screenshotPath = `/tmp/reply_${Date.now()}.png`
     await page.screenshot({ path: screenshotPath })
+    console.log('Screenshot salvo:', screenshotPath)
 
     // Não fecha a aba se for a única (senão fecha o Chrome)
     const pages = await browser.pages()
@@ -338,7 +365,12 @@ export async function postReply(url, replyText) {
     }
     // Se for única aba, só navega de volta pro home
     else {
-      await page.goto('https://x.com/home', { waitUntil: 'networkidle2' })
+      // Handler para dialogs de "descartar alterações"
+      page.on('dialog', async dialog => {
+        console.log('Dialog detectado:', dialog.message())
+        await dialog.dismiss()
+      })
+      await page.goto('https://x.com/home', { waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {})
     }
 
     return {

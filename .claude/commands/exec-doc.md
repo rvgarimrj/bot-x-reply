@@ -1,0 +1,3 @@
+# PADRONIZAÇÃO DE PESQUISA E CÓDIGO POR AGENTES:
+
+Preciso que pesquise no mcp context7 tudo que iremos precisar de bibliotecas mais atualizadas com 3 agentes e salve os snippets de codigos para consultas posteriores, fazendo com que eles saibam exatamente o padrão que deve ser seguido para evitarmos conflitos entre os codigos gerados e que cada um pesquise em harmonia com o todo -- ultrathink -- em paralelo

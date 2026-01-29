@@ -1,0 +1,64 @@
+# Configuração do Agente Orquestrador - MCP Context7
+# Responsável pela coordenação e gerenciamento dos agentes especializados
+
+agent:
+  name: "orchestrator_mcp_context7"
+  version: "1.0.0"
+  role: "lead_agent"
+  
+  capabilities:
+    - "Análise de requisitos do usuário"
+    - "Desenvolvimento de estratégia de execução"
+    - "Coordenação de agentes especializados"
+    - "Consolidação de resultados"
+    - "Gerenciamento de contexto compartilhado"
+    - "Resolução de conflitos entre agentes"
+  
+  tools:
+    - name: "@modelcontextprotocol/sdk"
+      version: "latest"
+      type: "typescript"
+    - name: "task_decomposer"
+      version: "2.1.0"
+    - name: "context_manager"
+      version: "1.5.0"
+    - name: "conflict_resolver"
+      version: "3.0.0"
+  
+  communication:
+    protocols: ["MCP", "A2A", "event_bus"]
+    message_formats: ["json", "protobuf"]
+    memory_bank: "shared_vector_store"
+    
+  coordination_rules:
+    max_concurrent_agents: 3
+    task_timeout: 300  # 5 minutos
+    retry_attempts: 3
+    conflict_resolution: "hierarchical"
+    
+  quality_gates:
+    code_coverage: 85
+    complexity_threshold: 8
+    linting_compliance: 100
+    context_consistency: 95
+
+  specialist_agents:
+    - name: "mcp_specialist"
+      role: "Model Context Protocol Expert"
+      priority: "high"
+    - name: "library_researcher"
+      role: "Library Research Specialist" 
+      priority: "high"
+    - name: "code_harmonizer"
+      role: "Code Harmony Specialist"
+      priority: "medium"
+
+  context_management:
+    global_context_file: "workspace/shared_context/mcp_context7.json"
+    local_memory_limit: "100MB"
+    context_sync_interval: 30  # segundos
+    
+  error_handling:
+    escalation_policy: "immediate"
+    fallback_strategies: ["retry", "delegate", "manual_intervention"]
+    logging_level: "INFO"

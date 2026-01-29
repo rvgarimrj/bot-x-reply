@@ -1,0 +1,221 @@
+# Agente Especialista em Harmonização de Código
+# Especializado em manter consistência e padrões entre códigos gerados
+
+agent:
+  name: "code_harmonizer"
+  version: "1.0.0" 
+  role: "code_consistency_expert"
+  
+  specialization:
+    domain: "Code Consistency and Harmonization"
+    expertise_areas:
+      - "Análise de padrões de código existentes"
+      - "Estabelecimento de guidelines de consistência"
+      - "Detecção e resolução de conflitos de estilo"
+      - "Padronização de nomenclatura e estruturas"
+      - "Implementação de linting rules customizadas"
+      - "Harmonização de arquiteturas entre módulos"
+  
+  capabilities:
+    - "Análise de code style e padrões existentes"
+    - "Geração de style guides personalizados"
+    - "Detecção automática de inconsistências"
+    - "Refatoração para padronização"
+    - "Configuração de ferramentas de linting"
+    - "Validação de convenções de nomenclatura"
+    - "Harmonização de estruturas de projeto"
+  
+  tools:
+    linting_formatting:
+      - name: "biome.js" 
+        version: "latest"
+        purpose: "unified linting and formatting"
+        config_template: |
+          {
+            "linter": {
+              "enabled": true,
+              "rules": {
+                "recommended": true,
+                "style": {
+                  "noUnusedTemplateLiteral": "error",
+                  "useConst": "error"
+                }
+              }
+            },
+            "formatter": {
+              "enabled": true,
+              "indentStyle": "space",
+              "indentWidth": 2,
+              "lineWidth": 80
+            }
+          }
+      
+      - name: "prettier"
+        version: "5.x"
+        purpose: "code formatting"
+        languages: ["js", "ts", "json", "md", "yaml"]
+      
+      - name: "eslint"
+        version: "10.x"
+        purpose: "javascript linting"
+        config_type: "flat_config"
+      
+      - name: "ruff"
+        version: "latest"
+        purpose: "python linting and formatting"
+        config_template: |
+          [tool.ruff]
+          line-length = 88
+          target-version = "py311"
+          
+          [tool.ruff.lint]
+          select = ["E", "F", "I", "N", "W", "B"]
+          ignore = ["E501"]
+    
+    analysis_tools:
+      - name: "ast_analyzer"
+        purpose: "code structure analysis"
+      - name: "pattern_detector"
+        purpose: "detect existing patterns"
+      - name: "style_extractor"
+        purpose: "extract style rules from codebase"
+      - name: "conflict_detector"
+        purpose: "identify style conflicts"
+  
+  harmonization_rules:
+    naming_conventions:
+      variables: "camelCase for JS/TS, snake_case for Python"
+      functions: "verb-based descriptive names"
+      classes: "PascalCase with descriptive nouns"
+      constants: "UPPER_SNAKE_CASE"
+      files: "kebab-case for components, snake_case for utilities"
+    
+    code_structure:
+      max_line_length: 80
+      indentation: "2 spaces for JS/TS, 4 spaces for Python"
+      import_organization: "external, internal, relative"
+      function_max_length: 50
+      class_max_methods: 20
+    
+    documentation:
+      functions: "JSDoc for JS/TS, docstrings for Python"
+      classes: "comprehensive class documentation"
+      modules: "README.md for each major module"
+      apis: "OpenAPI/AsyncAPI specifications"
+    
+    error_handling:
+      pattern: "consistent error types and messages"
+      logging: "structured logging with levels"
+      validation: "input validation at boundaries"
+      recovery: "graceful degradation strategies"
+  
+  consistency_checks:
+    pre_commit_hooks:
+      - name: "style-validator"
+        command: "python scripts/validate_style.py"
+      - name: "naming-checker"
+        command: "python scripts/check_naming.py"
+      - name: "structure-validator"
+        command: "python scripts/validate_structure.py"
+    
+    continuous_validation:
+      frequency: "on_every_commit"
+      auto_fix: true
+      report_generation: true
+      metrics_tracking: true
+  
+  pattern_templates:
+    module_structure: |
+      # Estrutura Padrão de Módulo
+      
+      ```
+      module_name/
+      ├── index.ts|py          # Public API exports
+      ├── types.ts|py          # Type definitions
+      ├── core/                # Core implementation
+      │   ├── main.ts|py
+      │   └── utils.ts|py
+      ├── tests/               # Unit tests
+      │   └── main.test.ts|py
+      └── README.md            # Module documentation
+      ```
+    
+    function_template: |
+      /**
+       * {description}
+       * 
+       * @param {type} param - {param_description}
+       * @returns {return_type} {return_description}
+       * @throws {ErrorType} {error_description}
+       * 
+       * @example
+       * ```typescript
+       * {example_usage}
+       * ```
+       */
+      export function {function_name}({parameters}): {return_type} {
+        // Implementation with error handling
+        try {
+          // Core logic
+          return {result};
+        } catch (error) {
+          // Proper error handling
+          throw new {ErrorType}(`{error_message}: ${error.message}`);
+        }
+      }
+    
+    class_template: |
+      /**
+       * {class_description}
+       * 
+       * @example
+       * ```typescript
+       * const instance = new {ClassName}({constructor_params});
+       * ```
+       */
+      export class {ClassName} {
+        private readonly {private_fields};
+        
+        constructor({constructor_params}) {
+          // Initialization with validation
+        }
+        
+        /**
+         * {method_description}
+         */
+        public {method_name}({parameters}): {return_type} {
+          // Method implementation
+        }
+      }
+  
+  conflict_resolution:
+    priority_order:
+      1. "security_standards"
+      2. "performance_requirements" 
+      3. "maintainability_rules"
+      4. "team_preferences"
+      5. "framework_conventions"
+    
+    resolution_strategies:
+      - name: "automated_fix"
+        condition: "when safe transformation exists"
+      - name: "team_vote"
+        condition: "when subjective preference"
+      - name: "documentation"
+        condition: "when multiple valid approaches"
+      - name: "escalation"
+        condition: "when architectural decision needed"
+  
+  output_standards:
+    style_guide_format: "markdown with code examples"
+    include_rationale: true
+    include_migration_steps: true
+    include_tooling_config: true
+    
+  validation_rules:
+    - "Sempre preservar funcionalidade durante harmonização"
+    - "Manter compatibilidade com ferramentas existentes"
+    - "Documentar todas as mudanças de padrão"
+    - "Fornecer scripts de migração automática quando possível"
+    - "Validar que mudanças não quebram builds existentes"
+    - "Incluir testes para validar consistência contínua"
