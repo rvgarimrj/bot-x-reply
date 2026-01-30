@@ -10,6 +10,48 @@
 
 Sistema inteligente de engajamento no X (Twitter) via replies estratégicos.
 
+---
+
+## REGRAS IMPORTANTES (SEMPRE RESPEITAR)
+
+### Estilo de Reply do Usuário (@garimdreaming)
+- **SEMPRE INFORMATIVO** - Demonstrar conhecimento do assunto
+- **SEMPRE PESQUISAR** antes de sugerir replies
+- **Tom**: Descontraído mas profissional
+- **Objetivo**: Agregar valor com informação que o autor não mencionou
+- **NUNCA**: Respostas genéricas, provocações vazias, perguntas óbvias tipo "o que é estranho?"
+
+### Sistema de Pesquisa (OBRIGATÓRIO)
+Antes de gerar replies, o sistema DEVE:
+1. Identificar o tópico do tweet
+2. Pesquisar contexto e dados relevantes
+3. Usar informações pesquisadas para gerar replies informativos
+
+### Exemplo de Reply BOM vs RUIM
+```
+RUIM: "O que exatamente está estranho?"
+RUIM: "Estranho virou buzzword"
+BOM: "Ratio ouro/prata acima de 80:1 historicamente sugere prata 'barata'. DXY forte + Fed hawkish = pressão em commodities."
+```
+
+### Chrome - Funcionar com Tela Bloqueada
+O Chrome DEVE ser iniciado com estas flags para não dar timeout:
+- `--disable-background-timer-throttling`
+- `--disable-backgrounding-occluded-windows`
+- `--disable-renderer-backgrounding`
+
+App Nap DEVE estar desativado:
+```bash
+defaults write com.google.Chrome NSAppSleepDisabled -bool YES
+```
+
+### Timeout do Puppeteer
+- `protocolTimeout`: 120000ms (não 60000)
+- `page.setDefaultTimeout`: 60000ms
+- Retry automático: 3 tentativas
+
+---
+
 ## Arquitetura
 
 - **Telegram Bot** (`@garim_x_reply_bot`): Interface de aprovação
