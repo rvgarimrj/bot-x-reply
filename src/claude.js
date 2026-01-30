@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import { researchTweet } from './research.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -17,39 +18,44 @@ try {
   console.warn('Perfil não encontrado, usando padrões')
 }
 
+/**
+ * Prompt do sistema atualizado para replies informativos
+ */
 const REPLY_SYSTEM_PROMPT = `Você é um especialista em criar replies estratégicos para o X (Twitter).
 
 PERFIL DO USUÁRIO:
 - Username: @${profile.x_username || 'user'}
 - Expertise: ${(profile.expertise || []).join(', ')}
-- Estilo: ${profile.style || 'direto e inteligente'}
+- Estilo: ${profile.style || 'informativo e profissional'}
+- Abordagem: ${profile.approach?.priority || 'demonstrar conhecimento e agregar valor'}
 
 REGRAS ABSOLUTAS:
 1. RESPONDA SEMPRE NO IDIOMA DO TWEET ORIGINAL
 2. MÁXIMO 280 caracteres (ideal: 150-200)
-3. AGREGUE VALOR - perspectiva nova, dado interessante, reflexão complementar
-4. TOM: direto, inteligente, às vezes provocativo
-5. UMA ÚNICA OPINIÃO FORTE - não fique em cima do muro
+3. DEMONSTRE CONHECIMENTO - traga informação que o autor não mencionou
+4. TOM: descontraído mas informativo, profissional
+5. AGREGUE VALOR REAL - dados, contexto, perspectiva informada
+
+O QUE FAZ UM BOM REPLY:
+- Traz INFORMAÇÃO NOVA que complementa o tweet
+- Mostra que você PESQUISOU e ENTENDE o assunto
+- Adiciona DADOS ou CONTEXTO relevante
+- Tom DESCONTRAÍDO mas PROFISSIONAL
+- Demonstra EXPERTISE sem ser arrogante
 
 EVITAR A TODO CUSTO:
 ${(profile.avoid || []).map(a => `- "${a}"`).join('\n')}
-- Repetir o que o tweet disse
-- Bajulação vazia
-- Perguntas genéricas ("o que você acha?")
 - Respostas genéricas que servem para qualquer tweet
-
-BOM REPLY:
-- Adiciona perspectiva que o autor não considerou
-- Traz experiência pessoal relevante
-- Faz conexão inesperada com outro tema
-- Desafia respeitosamente uma premissa
-- Complementa com dado ou insight
+- Provocações vazias sem informação
+- Perguntas óbvias ("o que é estranho?", "tipo o quê?")
+- Repetir o que o tweet já disse
+- Bajulação vazia
 
 FORMATO DE SAÍDA:
 Retorne EXATAMENTE 3 opções de reply, cada uma em uma linha separada, numeradas:
-1. [reply mais direto e curto]
-2. [reply com perspectiva diferente]
-3. [reply mais provocativo/opinativo]`
+1. [reply informativo e direto - traz um dado/fato relevante]
+2. [reply com contexto adicional - explica o porquê]
+3. [reply com perspectiva/análise - sua visão informada]`
 
 /**
  * Detecta o idioma do texto
@@ -59,17 +65,17 @@ export function detectLanguage(text) {
 
   // Caracteres e padrões exclusivos de cada idioma
   const ptIndicators = [
-    /[ãõç]/g,                           // Caracteres exclusivos do PT
-    /\b(você|vocês|não|então|também|já|até|depois|porque|porquê|está|estão|são|foi|foram|muito|pouco|aqui|ali|agora|ainda|sempre|nunca|nada|tudo|isso|este|esta|esse|essa|esses|essas|dele|dela|nosso|nossa|seu|sua|meu|minha|fazer|faz|feito|ter|tem|tinha|tenho|ser|sou|era|foi|ir|vai|vamos|vou|ver|vejo|dar|dá|dou|ficar|fica|ficou|querer|quer|quero|poder|pode|posso|dever|deve|devo|precisar|preciso|saber|sei|sabia|achar|acho|achei|pensar|penso|pensei|olhar|olha|olho|falar|falo|falou|dizer|diz|disse|entender|entendo|entendi|trabalhar|trabalho|trabalha|viver|vivo|vida|mundo|tempo|dia|ano|vez|coisa|caso|ponto|parte|forma|modo|lugar|lado|hora|momento|pessoa|gente|homem|mulher|filho|pai|mãe|casa|país|cidade|empresa|governo|estado|problema|questão|exemplo|história|trabalho|projeto|sistema|processo|informação|serviço|resultado|desenvolvimento|tecnologia|mercado|produto|cliente|equipe|área|valor|ideia|objetivo|solução|experiência|qualidade|importante|necessário|possível|diferente|melhor|maior|menor|novo|primeiro|último|próprio|cada|outro|mesmo|todo|alguns|muitos|mais|menos|bem|mal|assim|então|ainda|sempre|nunca|já|aqui|ali|onde|quando|como|porque|porquê|embora|enquanto|durante|antes|depois|sobre|entre|contra|através|mediante)\b/gi
+    /[ãõç]/g,
+    /\b(você|vocês|não|então|também|já|até|depois|porque|porquê|está|estão|são|foi|foram|muito|pouco|aqui|ali|agora|ainda|sempre|nunca|nada|tudo|isso|este|esta|esse|essa|esses|essas|dele|dela|nosso|nossa|seu|sua|meu|minha|fazer|faz|feito|ter|tem|tinha|tenho|ser|sou|era|foi|ir|vai|vamos|vou|ver|vejo|dar|dá|dou|ficar|fica|ficou|querer|quer|quero|poder|pode|posso|dever|deve|devo|precisar|preciso|saber|sei|sabia|achar|acho|achei|pensar|penso|pensei|olhar|olha|olho|falar|falo|falou|dizer|diz|disse|entender|entendo|entendi)\b/gi
   ]
 
   const esIndicators = [
-    /[ñ¿¡]/g,                           // Caracteres exclusivos do ES
-    /\b(usted|ustedes|también|entonces|después|ahora|siempre|nunca|nada|todo|esto|este|esta|ese|esa|esos|esas|aquel|aquella|suyo|suya|nuestro|nuestra|hacer|hago|hecho|tener|tiene|tengo|tenía|ser|soy|era|fue|ir|va|vamos|voy|ver|veo|dar|doy|quedar|queda|quedó|querer|quiere|quiero|poder|puede|puedo|deber|debe|debo|necesitar|necesito|saber|sé|sabía|pensar|pienso|pensé|mirar|mira|miro|hablar|hablo|habló|decir|dice|dijo|entender|entiendo|entendí|trabajar|trabajo|trabaja|vivir|vivo|vida|mundo|tiempo|día|año|vez|cosa|caso|punto|parte|forma|modo|lugar|lado|hora|momento|persona|gente|hombre|mujer|hijo|padre|madre|casa|país|ciudad|empresa|gobierno|estado|problema|cuestión|ejemplo|historia|trabajo|proyecto|sistema|proceso|información|servicio|resultado|desarrollo|tecnología|mercado|producto|cliente|equipo|área|valor|idea|objetivo|solución|experiencia|calidad|importante|necesario|posible|diferente|mejor|mayor|menor|nuevo|primero|último|propio|cada|otro|mismo|todos|algunos|muchos|más|menos|bien|mal|así|entonces|todavía|siempre|nunca|ya|aquí|allí|donde|cuando|como|porque|aunque|mientras|durante|antes|después|sobre|entre|contra|través|mediante)\b/gi
+    /[ñ¿¡]/g,
+    /\b(usted|ustedes|también|entonces|después|ahora|siempre|nunca|nada|todo|esto|este|esta|ese|esa|esos|esas|aquel|aquella|suyo|suya|nuestro|nuestra|hacer|hago|hecho|tener|tiene|tengo|tenía|ser|soy|era|fue|ir|va|vamos|voy|ver|veo|dar|doy|quedar|queda|quedó|querer|quiere|quiero|poder|puede|puedo)\b/gi
   ]
 
   const enIndicators = [
-    /\b(the|a|an|is|are|was|were|been|being|have|has|had|having|do|does|did|doing|will|would|could|should|may|might|must|can|this|that|these|those|what|which|who|whom|whose|where|when|why|how|if|then|else|because|although|while|during|before|after|about|between|against|through|with|without|for|from|into|onto|upon|within|among|towards|of|to|in|on|at|by|up|down|out|off|over|under|again|further|once|here|there|all|each|every|both|few|more|most|other|some|such|no|nor|not|only|own|same|so|than|too|very|just|also|now|always|never|often|sometimes|usually|already|still|yet|today|tomorrow|yesterday|week|month|year|time|day|thing|people|way|world|life|work|hand|part|place|case|point|fact|group|company|number|problem|system|program|question|government|country|home|school|room|mother|father|child|woman|man|friend|student|teacher|money|business|information|power|service|change|development|market|research|technology|experience|example|result|idea|value|job|area|level|order|process|course|policy|term|data|decision|practice|quality|control|issue|report|support|production|effort|effect|interest|community|action|position|member|management|project|opportunity|health|study|use|need|want|try|see|know|think|take|come|make|get|go|find|give|tell|ask|work|seem|feel|leave|call|keep|let|begin|show|hear|play|run|move|live|believe|hold|bring|happen|write|provide|sit|stand|lose|pay|meet|include|continue|set|learn|lead|understand|watch|follow|stop|create|speak|read|allow|add|spend|grow|open|walk|win|offer|remember|love|consider|appear|buy|wait|serve|die|send|expect|build|stay|fall|cut|reach|kill|remain|suggest|raise|pass|sell|require|produce|receive|claim|concern|mean|represent|rise|discuss|apply|plan|reduce|establish|compare|present|determine|develop|identify|involve|suppose|recognize|explain|announce|accept|challenge|support|join|indicate|replace|improve|manage|maintain|maintain|achieve|obtain|realize|extend|occur|avoid|design|process|introduce|perform|promote|carry|prepare|express|conduct|deliver|propose|review|describe|organize|encourage|define|handle|ensure|continue|attempt|select|generate|seek|demand|complete|contribute|assume|protect|assess|argue|demonstrate|reflect|confirm|investigate|feature|influence|reveal|combine|recommend|focus|operate|implement|explore|acquire|implement)\b/gi
+    /\b(the|a|an|is|are|was|were|been|being|have|has|had|having|do|does|did|doing|will|would|could|should|may|might|must|can|this|that|these|those|what|which|who|whom|whose|where|when|why|how|if|then|else|because|although|while|during|before|after|about|between|against|through|with|without|for|from|into|onto|upon|within|among|towards)\b/gi
   ]
 
   // Conta indicadores
@@ -89,20 +95,18 @@ export function detectLanguage(text) {
     enScore += (lowerText.match(pattern) || []).length
   }
 
-  // Boost para caracteres exclusivos (peso extra)
+  // Boost para caracteres exclusivos
   if (/[ãõç]/.test(lowerText)) ptScore += 5
   if (/[ñ¿¡]/.test(lowerText)) esScore += 5
 
   const scores = { pt: ptScore, es: esScore, en: enScore }
   const maxScore = Math.max(ptScore, esScore, enScore)
 
-  // Determina idioma
-  let language = 'en' // Default
+  let language = 'en'
   if (ptScore === maxScore && ptScore > 0) language = 'pt'
   else if (esScore === maxScore && esScore > 0) language = 'es'
   else if (enScore === maxScore) language = 'en'
 
-  // Confiança baseada na diferença entre scores
   const sortedScores = Object.values(scores).sort((a, b) => b - a)
   const diff = sortedScores[0] - sortedScores[1]
   let confidence = 'low'
@@ -113,10 +117,16 @@ export function detectLanguage(text) {
 }
 
 /**
- * Gera opções de reply para um tweet
+ * Gera opções de reply para um tweet COM PESQUISA
  */
 export async function generateReplies(tweetText, tweetAuthor, context = {}) {
   const langInfo = detectLanguage(tweetText)
+
+  // NOVA FUNCIONALIDADE: Pesquisa contexto antes de gerar
+  let researchContext = null
+  if (!context.skipResearch) {
+    researchContext = await researchTweet(tweetText, tweetAuthor)
+  }
 
   const languageInstruction = {
     pt: 'Responda em PORTUGUÊS BRASILEIRO',
@@ -124,15 +134,37 @@ export async function generateReplies(tweetText, tweetAuthor, context = {}) {
     en: 'Reply in ENGLISH'
   }[langInfo.language] || 'Reply in the same language as the tweet'
 
+  // Monta contexto de pesquisa para o prompt
+  let researchSection = ''
+  if (researchContext?.hasContext) {
+    const { topic, research } = researchContext
+    researchSection = `
+CONTEXTO PESQUISADO:
+- Tópico: ${topic.topic}
+- Categoria: ${topic.category}
+- Contexto provável: ${topic.probable_context}
+
+INFORMAÇÕES ENCONTRADAS:
+- Fatos: ${research.facts?.join('; ') || 'N/A'}
+- Dados: ${research.data_points?.join('; ') || 'N/A'}
+- Causa provável: ${research.probable_cause || 'N/A'}
+- Contexto adicional: ${research.additional_context || 'N/A'}
+
+USE ESSAS INFORMAÇÕES para criar replies INFORMATIVOS que demonstrem conhecimento.
+`
+  }
+
   const userPrompt = `TWEET DE @${tweetAuthor}:
 "${tweetText}"
-
-${context.additionalContext ? `CONTEXTO ADICIONAL: ${context.additionalContext}` : ''}
+${researchSection}
+${context.additionalContext ? `CONTEXTO DO USUÁRIO: ${context.additionalContext}` : ''}
 
 IDIOMA DETECTADO: ${langInfo.language.toUpperCase()} (${langInfo.confidence})
 INSTRUÇÃO: ${languageInstruction}
 
-Gere 3 opções de reply seguindo as regras. Apenas as 3 opções numeradas, nada mais.`
+Gere 3 opções de reply INFORMATIVOS que demonstrem conhecimento do assunto.
+Use os dados pesquisados para agregar valor real.
+Apenas as 3 opções numeradas, nada mais.`
 
   try {
     const response = await anthropic.messages.create({
@@ -149,6 +181,7 @@ Gere 3 opções de reply seguindo as regras. Apenas as 3 opções numeradas, nad
       success: true,
       replies,
       language: langInfo.language,
+      research: researchContext,
       model: response.model,
       usage: response.usage
     }
@@ -170,11 +203,9 @@ function parseReplies(text) {
   const replies = []
 
   for (const line of lines) {
-    // Procura linhas que começam com 1., 2., 3.
     const match = line.match(/^(\d+)\.\s*(.+)/)
     if (match) {
       let reply = match[2].trim()
-      // Remove aspas se presentes
       reply = reply.replace(/^["']|["']$/g, '')
       replies.push(reply)
     }
@@ -193,11 +224,17 @@ TWEET: "${tweet.text}"
 AUTOR: @${tweet.author}
 MÉTRICAS: ${tweet.likes || 0} likes, ${tweet.replies || 0} replies, ${tweet.retweets || 0} RTs
 
+Considere:
+- É um assunto onde posso demonstrar conhecimento?
+- Há espaço para agregar informação nova?
+- O autor é relevante na área?
+
 Responda APENAS com um JSON:
 {
   "score": 1-10,
   "reasons": ["razão 1", "razão 2"],
-  "best_angle": "sugestão de ângulo para reply",
+  "best_angle": "sugestão de ângulo INFORMATIVO para reply",
+  "topic_category": "crypto|stocks|tech|macro|politics|other",
   "skip_reason": null ou "motivo para não responder"
 }`
 
@@ -209,7 +246,6 @@ Responda APENAS com um JSON:
     })
 
     const content = response.content[0].text
-    // Extrai JSON do texto
     const jsonMatch = content.match(/\{[\s\S]*\}/)
     if (jsonMatch) {
       return JSON.parse(jsonMatch[0])
