@@ -100,7 +100,8 @@ async function getBrowser() {
   // Tenta conectar a um Chrome já aberto com debug port
   try {
     const browser = await puppeteer.connect({
-      browserURL: 'http://127.0.0.1:9222'
+      browserURL: 'http://127.0.0.1:9222',
+      protocolTimeout: 60000 // 60 segundos de timeout
     })
     console.log('✅ Conectado ao Chrome (porta 9222)')
     return { browser, shouldClose: false }
