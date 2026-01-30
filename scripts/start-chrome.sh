@@ -13,10 +13,17 @@ echo ""
 # pkill -f "Google Chrome"
 
 # Abre Chrome com debug port
+# Flags extras para funcionar com tela bloqueada:
+#   --disable-background-timer-throttling: evita throttling de timers
+#   --disable-backgrounding-occluded-windows: mantém renderização ativa
+#   --disable-renderer-backgrounding: evita suspensão do renderer
 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   --remote-debugging-port=9222 \
   --no-first-run \
   --no-default-browser-check \
+  --disable-background-timer-throttling \
+  --disable-backgrounding-occluded-windows \
+  --disable-renderer-backgrounding \
   "https://x.com" &
 
 echo "✅ Chrome aberto!"

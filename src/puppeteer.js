@@ -41,22 +41,53 @@ async function humanDelay(range) {
 }
 
 /**
+ * Fecha abas em excesso para liberar memória do Chrome
+ */
+async function closeExcessTabs(browser, maxTabs = 3) {
+  try {
+    const pages = await Promise.race([
+      browser.pages(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
+    ]).catch(() => [])
+
+    if (pages.length > maxTabs) {
+      console.log(`🧹 Fechando ${pages.length - maxTabs} abas em excesso...`)
+      // Fecha as abas mais antigas, mantendo as últimas
+      for (let i = 0; i < pages.length - maxTabs; i++) {
+        await pages[i].close().catch(() => {})
+      }
+    }
+  } catch (e) {
+    // Ignora erros - limpeza não é crítica
+  }
+}
+
+/**
  * Fecha aba de forma segura (não fecha se for a última)
+ * Com timeout curto para não travar o fluxo principal
  */
 async function safeClosePage(browser, page) {
   try {
-    const pages = await browser.pages()
+    // Usa Promise.race para não travar se browser.pages() demorar
+    const pagesPromise = browser.pages()
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('timeout')), 10000)
+    )
+
+    const pages = await Promise.race([pagesPromise, timeoutPromise]).catch(() => [page])
+
     if (pages.length > 1) {
       // Tem mais de uma aba, pode fechar
       console.log(`Fechando aba (${pages.length} abas abertas)`)
-      await page.close()
+      await page.close().catch(() => {})
     } else {
       // É a última aba, volta pro home ao invés de fechar
       console.log('Última aba, navegando pro home ao invés de fechar')
       await page.goto('https://x.com/home', { waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {})
     }
   } catch (e) {
-    console.log('Erro ao fechar aba:', e.message)
+    // Ignora erros silenciosamente - fechar aba não é crítico
+    console.log('Aviso: não foi possível fechar aba de forma limpa')
   }
 }
 
@@ -95,25 +126,49 @@ function findChromePath() {
 
 /**
  * Conecta ao Chrome existente (que deve estar logado no X)
+ * Com retry automático para lidar com timeouts
  */
 async function getBrowser() {
-  // Tenta conectar a um Chrome já aberto com debug port
-  try {
-    const browser = await puppeteer.connect({
-      browserURL: 'http://127.0.0.1:9222',
-      protocolTimeout: 60000 // 60 segundos de timeout
-    })
-    console.log('✅ Conectado ao Chrome (porta 9222)')
-    return { browser, shouldClose: false }
-  } catch (error) {
-    // Não conseguiu conectar - precisa abrir Chrome com debug
-    throw new Error(
-      'Chrome não está rodando com porta de debug.\n\n' +
-      'Execute primeiro:\n' +
-      './scripts/start-chrome.sh\n\n' +
-      'Ou abra o Chrome manualmente com:\n' +
-      'open -a "Google Chrome" --args --remote-debugging-port=9222'
-    )
+  const maxRetries = 3
+  const retryDelay = 5000 // 5 segundos entre tentativas
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const browser = await puppeteer.connect({
+        browserURL: 'http://127.0.0.1:9222',
+        protocolTimeout: 120000 // 120 segundos de timeout (aumentado de 60s)
+      })
+      console.log('✅ Conectado ao Chrome (porta 9222)')
+      return { browser, shouldClose: false }
+    } catch (error) {
+      const isTimeout = error.message.includes('timed out') || error.message.includes('timeout')
+
+      if (isTimeout && attempt < maxRetries) {
+        console.log(`⏱️ Tentativa ${attempt}/${maxRetries} falhou (timeout), aguardando ${retryDelay/1000}s...`)
+        await new Promise(r => setTimeout(r, retryDelay))
+        continue
+      }
+
+      // Se não é timeout ou é a última tentativa, lança erro apropriado
+      if (isTimeout) {
+        throw new Error(
+          'Chrome está demorando para responder (timeout após 3 tentativas).\n\n' +
+          'Possíveis soluções:\n' +
+          '1. Feche abas não utilizadas no Chrome\n' +
+          '2. Reinicie o Chrome: ./scripts/start-chrome.sh\n' +
+          '3. Verifique se há muitas extensões carregadas'
+        )
+      }
+
+      // Não conseguiu conectar - Chrome não está rodando
+      throw new Error(
+        'Chrome não está rodando com porta de debug.\n\n' +
+        'Execute primeiro:\n' +
+        './scripts/start-chrome.sh\n\n' +
+        'Ou abra o Chrome manualmente com:\n' +
+        'open -a "Google Chrome" --args --remote-debugging-port=9222'
+      )
+    }
   }
 }
 
@@ -174,7 +229,14 @@ export async function extractTweet(url) {
   const { browser, shouldClose } = await getBrowser()
 
   try {
+    // Fecha abas em excesso para liberar memória do Chrome
+    await closeExcessTabs(browser, 3)
+
     const page = await browser.newPage()
+
+    // Aumenta timeouts para operações na página
+    page.setDefaultTimeout(60000)
+    page.setDefaultNavigationTimeout(60000)
 
     // Configura viewport como desktop normal
     await page.setViewport({ width: 1280, height: 800 })
@@ -255,7 +317,15 @@ export async function postReply(url, replyText) {
   const { browser, shouldClose } = await getBrowser()
 
   try {
+    // Fecha abas em excesso para liberar memória do Chrome
+    await closeExcessTabs(browser, 3)
+
     const page = await browser.newPage()
+
+    // Aumenta timeouts para operações na página
+    page.setDefaultTimeout(60000) // 60s para operações gerais
+    page.setDefaultNavigationTimeout(60000) // 60s para navegação
+
     await page.setViewport({ width: 1280, height: 800 })
 
     console.log('Navegando para:', url)
@@ -458,8 +528,13 @@ export async function checkLogin() {
   const { browser, shouldClose } = await getBrowser()
 
   try {
+    await closeExcessTabs(browser, 3)
+
     const page = await browser.newPage()
-    await page.goto('https://x.com/home', { waitUntil: 'networkidle2', timeout: 30000 })
+    page.setDefaultTimeout(60000)
+    page.setDefaultNavigationTimeout(60000)
+
+    await page.goto('https://x.com/home', { waitUntil: 'networkidle2', timeout: 60000 })
 
     // Verifica se tem o botão de postar (indica que está logado)
     const isLoggedIn = await page.evaluate(() => {
