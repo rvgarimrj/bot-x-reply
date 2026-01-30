@@ -65,3 +65,55 @@ mcp__playwright__browser_take_screenshot
 - Intervalo 15min-2h entre replies
 - Sempre aprovar manualmente
 - Detecta idioma automaticamente
+
+## Subir Serviços (se caírem ou após reiniciar)
+
+### 1. Chrome do Bot (modo debug)
+```bash
+# Mata Chrome do bot se estiver travado
+pkill -9 -f "chrome-bot-profile"
+
+# Inicia Chrome com flags anti-suspensão
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --remote-debugging-port=9222 \
+  --user-data-dir="$HOME/.chrome-bot-profile" \
+  --no-first-run \
+  --disable-background-timer-throttling \
+  --disable-backgrounding-occluded-windows \
+  --disable-renderer-backgrounding \
+  "https://x.com" &
+```
+
+### 2. Bot Telegram
+```bash
+cd /Users/user/AppsCalude/Bot-X-Reply
+node scripts/reply-bot.js &
+```
+
+### 3. Daemon de Busca
+```bash
+cd /Users/user/AppsCalude/Bot-X-Reply
+node scripts/search-daemon.js &
+```
+
+### 4. Desativar App Nap (se necessário)
+```bash
+defaults write com.google.Chrome NSAppSleepDisabled -bool YES
+```
+
+### Verificar se está rodando
+```bash
+# Chrome
+curl -s http://127.0.0.1:9222/json/version | head -1
+
+# Bot e Daemon
+pgrep -f "reply-bot.js" && echo "Bot OK"
+pgrep -f "search-daemon.js" && echo "Daemon OK"
+```
+
+### LaunchAgents (auto-start)
+Os serviços iniciam automaticamente via launchd:
+- `com.botxreply.setup.plist` - Desativa App Nap
+- `com.botxreply.chrome.plist` - Chrome modo debug
+- `com.botxreply.bot.plist` - Bot Telegram
+- `com.botxreply.daemon.plist` - Daemon de busca
