@@ -33,7 +33,7 @@ const CONFIG = {
   intervalMinutes: 120,        // 2 horas entre buscas
   startHour: 8,                // Começa às 8h
   endHour: 22,                 // Termina às 22h
-  workDays: [1, 2, 3, 4, 5],   // Seg=1, Ter=2, ... Sex=5
+  workDays: [1, 2, 3, 4, 5, 6], // Seg=1, Ter=2, ... Sáb=6
   maxTweets: 5,                // Máximo de tweets por busca
   timezone: 'America/Sao_Paulo'
 }
