@@ -18,6 +18,7 @@ import { fileURLToPath } from 'url'
 import telegram from '../src/telegram.js'
 import { generateReplies } from '../src/claude.js'
 import { getTweet, extractTweetId } from '../src/twitter.js' // API para LER (quota alta)
+import { extractTweet as extractTweetPuppeteer } from '../src/puppeteer.js' // Fallback via browser
 import { postReply as postReplyBrowser } from '../src/puppeteer.js' // Puppeteer para POSTAR (zero API)
 import { findBestTweets, formatTweetCard } from '../src/tweet-finder.js' // Busca proativa
 import { canPostMore, recordReply, getDailyStats } from '../src/finder.js'
@@ -114,9 +115,31 @@ async function processTweetUrl(url) {
       return
     }
 
-    const tweet = await getTweet(tweetId)
+    // Tenta API do X primeiro
+    let tweet = await getTweet(tweetId)
 
+    // Se API falhar, tenta Puppeteer como fallback
     if (!tweet) {
+      console.log('API falhou, tentando Puppeteer...')
+      try {
+        const puppeteerResult = await extractTweetPuppeteer(url)
+        if (puppeteerResult.success && puppeteerResult.text) {
+          tweet = {
+            id: tweetId,
+            text: puppeteerResult.text,
+            author: puppeteerResult.author || 'unknown',
+            likes: puppeteerResult.likes || 0,
+            replies: puppeteerResult.replies || 0,
+            retweets: puppeteerResult.retweets || 0
+          }
+          console.log('✅ Tweet extraído via Puppeteer')
+        }
+      } catch (e) {
+        console.error('Puppeteer fallback falhou:', e.message)
+      }
+    }
+
+    if (!tweet || !tweet.text) {
       await telegram.sendMessage(
         '❌ Não consegui acessar o tweet.\n\n' +
         'Cole o texto do tweet aqui que eu gero os replies:'
