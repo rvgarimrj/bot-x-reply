@@ -378,7 +378,7 @@ async function main() {
   console.log('🤖 Search Daemon iniciando...')
   console.log('')
   console.log('📅 Configuração:')
-  console.log(`   Dias: Seg a Sex`)
+  console.log(`   Dias: Seg a Sáb`)
   console.log(`   Horário: ${CONFIG.startHour}h às ${CONFIG.endHour}h`)
   console.log(`   Intervalo: ${CONFIG.intervalMinutes} minutos`)
   console.log('')
