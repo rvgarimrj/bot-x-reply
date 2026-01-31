@@ -159,3 +159,49 @@ Os serviços iniciam automaticamente via launchd:
 - `com.botxreply.chrome.plist` - Chrome modo debug
 - `com.botxreply.bot.plist` - Bot Telegram
 - `com.botxreply.daemon.plist` - Daemon de busca
+
+---
+
+## Histórico de Melhorias (Guia de Referência)
+
+### 2026-01-30: Correções Críticas
+
+#### 1. Timeout do Chrome com Tela Bloqueada
+**Problema**: Chrome dava timeout quando a tela do Mac estava bloqueada.
+**Solução**:
+- Aumentar `protocolTimeout` de 60s para 120s
+- Adicionar retry automático (3 tentativas)
+- Flags anti-suspensão no Chrome
+- Desativar App Nap: `defaults write com.google.Chrome NSAppSleepDisabled -bool YES`
+
+#### 2. Sistema de Pesquisa Informativa
+**Problema**: Replies genéricos tipo "o que é estranho?" sem contexto.
+**Solução**:
+- Novo módulo `src/research.js`
+- Identifica tópico do tweet antes de gerar
+- Pesquisa dados e contexto relevantes
+- Gera replies informativos com dados reais
+
+#### 3. Fallback Puppeteer quando API Falha
+**Problema**: Quando API do X dá erro 429, sistema gerava replies errados baseado só no username.
+**Solução**:
+- Se API falhar → Tenta Puppeteer
+- Se Puppeteer falhar → Pede texto manual
+- Fluxo: API → Puppeteer → Manual
+
+#### 4. Conflito de Instâncias Telegram
+**Problema**: Erro "409 Conflict: terminated by other getUpdates request"
+**Solução**:
+- Descarregar LaunchAgents antes de iniciar manualmente
+- `launchctl unload ~/Library/LaunchAgents/com.botxreply.*.plist`
+- Manter apenas UMA instância do bot rodando
+
+### Checklist de Problemas Comuns
+
+| Problema | Causa | Solução |
+|----------|-------|---------|
+| Timeout Chrome | Tela bloqueada | Verificar flags anti-suspensão |
+| Replies genéricos | Sem texto do tweet | Verificar extração (API ou Puppeteer) |
+| Erro 429 | Rate limit X | Aguardar 15-30min ou usar Puppeteer |
+| Conflito Telegram | Múltiplas instâncias | Matar todos e iniciar um só |
+| "Não consegui acessar" | API + Puppeteer falharam | Colar texto manualmente |
