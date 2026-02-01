@@ -33,7 +33,7 @@ const CONFIG = {
   intervalMinutes: 120,        // 2 horas entre buscas
   startHour: 8,                // Começa às 8h
   endHour: 22,                 // Termina às 22h
-  workDays: [1, 2, 3, 4, 5, 6], // Seg=1, Ter=2, ... Sáb=6
+  workDays: [0, 1, 2, 3, 4, 5, 6], // Todos os dias (Dom=0, Seg=1, ... Sáb=6)
   maxTweets: 5,                // Máximo de tweets por busca
   timezone: 'America/Sao_Paulo'
 }
@@ -378,7 +378,7 @@ async function main() {
   console.log('🤖 Search Daemon iniciando...')
   console.log('')
   console.log('📅 Configuração:')
-  console.log(`   Dias: Seg a Sáb`)
+  console.log(`   Dias: Todos os dias`)
   console.log(`   Horário: ${CONFIG.startHour}h às ${CONFIG.endHour}h`)
   console.log(`   Intervalo: ${CONFIG.intervalMinutes} minutos`)
   console.log('')
@@ -405,7 +405,7 @@ async function main() {
   if (isWorkingHours()) {
     await telegram.sendMessage(
       `🤖 <b>Search Daemon ativo!</b>\n\n` +
-      `📅 Seg-Sex, ${CONFIG.startHour}h-${CONFIG.endHour}h\n` +
+      `📅 Todos os dias, ${CONFIG.startHour}h-${CONFIG.endHour}h\n` +
       `⏰ Buscas a cada ${CONFIG.intervalMinutes} minutos\n\n` +
       `Primeira busca começando...`
     )
