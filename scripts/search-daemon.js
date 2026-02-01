@@ -32,7 +32,7 @@ const INTERACTION_FILE = join(__dirname, '../.user-interaction.json')
 const CONFIG = {
   intervalMinutes: 120,        // 2 horas entre buscas
   startHour: 8,                // Começa às 8h
-  endHour: 22,                 // Termina às 22h
+  endHour: 24,                 // Termina à meia-noite
   workDays: [0, 1, 2, 3, 4, 5, 6], // Todos os dias (Dom=0, Seg=1, ... Sáb=6)
   maxTweets: 5,                // Máximo de tweets por busca
   timezone: 'America/Sao_Paulo'
