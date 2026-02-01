@@ -14,24 +14,49 @@ Sistema inteligente de engajamento no X (Twitter) via replies estratégicos.
 
 ## REGRAS IMPORTANTES (SEMPRE RESPEITAR)
 
-### Estilo de Reply do Usuário (@garimdreaming)
-- **SEMPRE INFORMATIVO** - Demonstrar conhecimento do assunto
-- **SEMPRE PESQUISAR** antes de sugerir replies
-- **Tom**: Descontraído mas profissional
-- **Objetivo**: Agregar valor com informação que o autor não mencionou
-- **NUNCA**: Respostas genéricas, provocações vazias, perguntas óbvias tipo "o que é estranho?"
+### PRIORIDADE #1: Parecer HUMANO (Anti-Detecção de IA)
 
-### Sistema de Pesquisa (OBRIGATÓRIO)
-Antes de gerar replies, o sistema DEVE:
-1. Identificar o tópico do tweet
-2. Pesquisar contexto e dados relevantes
-3. Usar informações pesquisadas para gerar replies informativos
+O usuário @garimdreaming foi BLOQUEADO por contas que detectaram replies de IA.
+**TODOS os replies devem parecer 100% escritos por humano.**
+
+### PROIBIDO (Detectável como IA):
+
+**Inglês:**
+- "Fun fact:", "Interestingly,", "It's worth noting", "Actually,"
+- "masterpiece", "revolutionary", "game-changer", "countless", "incredible"
+
+**Português:**
+- "Curiosidade:", "Vale ressaltar:", "Na verdade,", "De fato,"
+- "obra-prima", "revolucionário", "incrível", "impressionante"
+- "Muito bom!", "Excelente!", "Perfeito!", "Concordo plenamente!"
+
+**Ambos:**
+- Estrutura com travessões listando múltiplos fatos
+- Gramática 100% perfeita
+- Empacotar muitos dados/fatos em um reply
+
+### COMO HUMANOS ESCREVEM:
+
+**Inglês:** "omg", "lol", "ngl", "tbh", "lowkey", "fr", "no way"
+**Português:** "cara", "mano", "véi", "pô", "vc", "tb", "pq", "mt", "kkkk"
+
+- UMA ideia por reply, não uma lista
+- Opinião pessoal, não dados frios
+- Informal, às vezes incompleto
+- Memória/experiência pessoal
 
 ### Exemplo de Reply BOM vs RUIM
+
+**Inglês:**
 ```
-RUIM: "O que exatamente está estranho?"
-RUIM: "Estranho virou buzzword"
-BOM: "Ratio ouro/prata acima de 80:1 historicamente sugere prata 'barata'. DXY forte + Fed hawkish = pressão em commodities."
+RUIM: "That's Eric Chahi's masterpiece! The rotoscoped animation was revolutionary - influenced countless indie devs."
+BOM: "played this so much as a kid, the death animations were brutal"
+```
+
+**Português:**
+```
+RUIM: "Essa é a obra-prima do Eric Chahi! A animação rotoscópica foi revolucionária - influenciou inúmeros desenvolvedores indie."
+BOM: "jogava isso direto quando criança, as animações de morte eram brutais"
 ```
 
 ### Chrome - Funcionar com Tela Bloqueada
@@ -163,6 +188,25 @@ Os serviços iniciam automaticamente via launchd:
 ---
 
 ## Histórico de Melhorias (Guia de Referência)
+
+### 2026-02-01: Anti-Detecção de IA
+
+**Problema**: Usuário foi BLOQUEADO por @levelsio por reply detectado como IA.
+**Reply problemático**: "That's Eric Chahi's masterpiece! The rotoscoped animation was revolutionary - influenced countless indie devs. Fun fact: it runs on everything now."
+
+**Sinais de IA detectados**:
+- "Fun fact:" - frase típica de ChatGPT
+- "masterpiece", "revolutionary", "countless" - palavras genéricas de IA
+- Estrutura perfeita com múltiplos fatos separados por travessões
+- Muita informação empacotada em um reply
+
+**Solução**:
+- Reescrito prompt em `src/claude.js` para gerar replies HUMANOS
+- Foco em: casual, curto, uma ideia, opinião pessoal
+- Lista de palavras/frases PROIBIDAS
+- Exemplos de como humanos realmente escrevem
+
+---
 
 ### 2026-01-30: Correções Críticas
 
