@@ -240,70 +240,80 @@ async function runReplyCycle() {
       return
     }
 
-    // Pega o melhor tweet
-    const tweet = tweets[0]
-    console.log(`Tweet selecionado: @${tweet.author} (score: ${tweet.score})`)
+    // Tenta cada tweet da lista ate conseguir postar
+    for (const tweet of tweets) {
+      console.log(`Tweet selecionado: @${tweet.author} (score: ${tweet.score})`)
 
-    // Verifica se deve postar baseado no score e progresso
-    if (!shouldPostReply(tweet.score)) {
-      console.log('Score muito baixo para progresso atual, pulando')
-      return
-    }
+      // Verifica se deve postar baseado no score e progresso
+      if (!shouldPostReply(tweet.score)) {
+        console.log('Score muito baixo para progresso atual, pulando')
+        continue
+      }
 
-    // Gera replies com rotacao de estilo
-    const lastStyles = getRecentStyles()
-    const result = await generateReplies(tweet.text, tweet.author, {
-      lastStyles,
-      skipResearch: false
-    })
-
-    if (!result.success || result.replies.length === 0) {
-      console.log('Falha ao gerar replies')
-      recordError('generate_replies_failed')
-      return
-    }
-
-    // Usa o primeiro reply (mais alinhado com estilo sugerido)
-    const reply = result.replies[0]
-    const style = result.suggestedStyle
-
-    console.log(`Reply gerado (${result.language}, estilo: ${style}):`)
-    console.log(`"${reply}"`)
-
-    // Posta via Puppeteer
-    console.log('Postando via Chrome...')
-    const postResult = await postReply(tweet.url, reply)
-
-    if (postResult.success) {
-      // Registra sucesso
-      recordReply(tweet.url, {
-        author: tweet.author,
-        language: result.language,
-        style: style
+      // Gera replies com rotacao de estilo
+      const lastStyles = getRecentStyles()
+      const result = await generateReplies(tweet.text, tweet.author, {
+        lastStyles,
+        skipResearch: false
       })
 
-      recordPostedReply({
-        tweetUrl: tweet.url,
-        tweetAuthor: tweet.author,
-        tweetText: tweet.text,
-        replyText: reply,
-        replyIndex: 1,
-        wasRecommended: true,
-        source: tweet.source || 'unknown'
-      })
+      if (!result.success || result.replies.length === 0) {
+        console.log('Falha ao gerar replies, tentando proximo tweet')
+        continue
+      }
 
-      lastReplyTime = Date.now()
-      saveState()
+      // Usa o primeiro reply (mais alinhado com estilo sugerido)
+      const reply = result.replies[0]
+      const style = result.suggestedStyle
 
-      const stats = getDailyStats()
-      console.log(`Reply postado! (${stats.repliesPosted}/${CONFIG.dailyTarget.normal})`)
+      console.log(`Reply gerado (${result.language}, estilo: ${style}):`)
+      console.log(`"${reply}"`)
 
-      // Notificacao desativada - apenas resumo diario as 23:30
+      // Posta via Puppeteer
+      console.log('Postando via Chrome...')
+      const postResult = await postReply(tweet.url, reply)
 
-    } else {
-      console.log('Falha ao postar:', postResult.error)
-      recordError(postResult.error)
-    }
+      // Se replies restritos, tenta proximo tweet
+      if (!postResult.success && postResult.skippable) {
+        console.log(`⏭️ Pulando para proximo tweet (${postResult.error})`)
+        continue
+      }
+
+      if (postResult.success) {
+        // Registra sucesso
+        recordReply(tweet.url, {
+          author: tweet.author,
+          language: result.language,
+          style: style
+        })
+
+        recordPostedReply({
+          tweetUrl: tweet.url,
+          tweetAuthor: tweet.author,
+          tweetText: tweet.text,
+          replyText: reply,
+          replyIndex: 1,
+          wasRecommended: true,
+          source: tweet.source || 'unknown'
+        })
+
+        lastReplyTime = Date.now()
+        saveState()
+
+        const stats = getDailyStats()
+        console.log(`Reply postado! (${stats.repliesPosted}/${CONFIG.dailyTarget.normal})`)
+
+        // Notificacao desativada - apenas resumo diario as 23:30
+        return // Sucesso, sai do loop
+
+      } else {
+        console.log('Falha ao postar:', postResult.error)
+        recordError(postResult.error)
+        return // Erro nao-pulavel, sai do loop
+      }
+    } // fim do for
+
+    console.log('Nenhum tweet valido encontrado neste ciclo')
 
   } catch (error) {
     console.error('Erro no ciclo:', error.message)

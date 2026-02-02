@@ -370,6 +370,30 @@ export async function postReply(url, replyText) {
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 })
     await humanDelay(HUMAN_CONFIG.delays.pageLoad)
 
+    // Verifica se replies estão restritos ("Quem pode responder?" / "Who can reply?")
+    const isRestricted = await page.evaluate(() => {
+      const pageText = document.body.innerText || ''
+      // Detecta mensagens de restrição em PT e EN
+      const restrictedPatterns = [
+        'quem pode responder',
+        'who can reply',
+        'pessoas mencionadas podem responder',
+        'mentioned people can reply',
+        'contas que você segue podem responder',
+        'accounts you follow can reply',
+        'apenas pessoas mencionadas',
+        'only people mentioned'
+      ]
+      const lowerText = pageText.toLowerCase()
+      return restrictedPatterns.some(pattern => lowerText.includes(pattern))
+    })
+
+    if (isRestricted) {
+      console.log('⛔ Tweet com replies restritos - pulando')
+      await safeClosePage(browser, page)
+      return { success: false, error: 'replies_restricted', skippable: true }
+    }
+
     // Scroll para ver o tweet
     await humanScroll(page)
     await humanDelay(HUMAN_CONFIG.delays.readTweet)
