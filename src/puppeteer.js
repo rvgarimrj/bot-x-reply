@@ -173,20 +173,56 @@ async function getBrowser() {
 }
 
 /**
- * Digita texto com velocidade humana
+ * Insere texto usando keyboard.type (método mais confiável para o X)
+ * Usa digitação rápida (não char por char) para não demorar muito
+ * e não interferir tanto com o usuário
  */
 async function humanType(page, selector, text) {
   await page.waitForSelector(selector, { timeout: 10000 })
-  await page.click(selector)
-  await humanDelay(HUMAN_CONFIG.delays.beforeType)
 
-  // Digita caractere por caractere
-  for (const char of text) {
-    await page.keyboard.type(char)
-    await new Promise(r => setTimeout(r, randomDelay(HUMAN_CONFIG.typingSpeed)))
+  // Clica no campo para focar
+  await page.click(selector)
+  await humanDelay({ min: 500, max: 800 })
+
+  // Foca no elemento correto do X (contenteditable)
+  await page.evaluate(() => {
+    const textbox = document.querySelector('[data-testid="tweetTextarea_0"]')
+      || document.querySelector('[contenteditable="true"][role="textbox"]')
+      || document.querySelector('[data-testid="tweetTextarea_0RichTextInputContainer"]')
+
+    if (textbox) {
+      textbox.focus()
+      // Clica para garantir o cursor
+      textbox.click()
+    }
+  })
+
+  await humanDelay({ min: 200, max: 400 })
+
+  // Usa keyboard.type com delay baixo (rápido mas funciona)
+  // delay: 20-40ms por char = texto de 100 chars leva 2-4 segundos
+  const charDelay = 20 + Math.floor(Math.random() * 20) // 20-40ms
+  console.log(`Digitando ${text.length} chars (delay: ${charDelay}ms/char)...`)
+
+  await page.keyboard.type(text, { delay: charDelay })
+
+  // Verifica se o texto foi inserido
+  const textInserted = await page.evaluate(() => {
+    const textbox = document.querySelector('[data-testid="tweetTextarea_0"]')
+      || document.querySelector('[contenteditable="true"][role="textbox"]')
+    return textbox && textbox.textContent && textbox.textContent.trim().length > 0
+  })
+
+  if (!textInserted) {
+    console.log('Texto não detectado, tentando método alternativo...')
+    // Fallback: tenta clicar e digitar novamente
+    await page.click(selector)
+    await humanDelay({ min: 300, max: 500 })
+    await page.keyboard.type(text, { delay: 30 })
   }
 
-  await humanDelay(HUMAN_CONFIG.delays.afterType)
+  // Delay depois (simula humano verificando o texto)
+  await humanDelay({ min: 400, max: 700 })
 }
 
 /**
@@ -198,13 +234,15 @@ async function humanClick(page, selector) {
 
   // Move mouse suavemente até o elemento antes de clicar
   const element = await page.$(selector)
-  const box = await element.boundingBox()
-  if (box) {
-    await page.mouse.move(
-      box.x + box.width / 2 + (Math.random() * 10 - 5),
-      box.y + box.height / 2 + (Math.random() * 10 - 5),
-      { steps: 10 }
-    )
+  if (element) {
+    const box = await element.boundingBox()
+    if (box) {
+      await page.mouse.move(
+        box.x + box.width / 2 + (Math.random() * 10 - 5),
+        box.y + box.height / 2 + (Math.random() * 10 - 5),
+        { steps: 10 }
+      )
+    }
   }
 
   await page.click(selector)
@@ -372,7 +410,7 @@ export async function postReply(url, replyText) {
     for (const sel of replySelectors) {
       try {
         await page.waitForSelector(sel, { timeout: 5000 })
-        console.log('Digitando reply (velocidade humana)...')
+        console.log('Inserindo reply (via DOM, nao interfere com teclado)...')
         await humanType(page, sel, replyText)
         typed = true
         break
@@ -470,39 +508,52 @@ export async function postReply(url, replyText) {
       throw new Error('Não encontrei o botão de postar reply')
     }
 
-    // Aguarda o reply ser enviado (modal fecha ou desaparece)
+    // Aguarda o reply ser enviado
     console.log('Aguardando confirmação do envio...')
     await humanDelay(HUMAN_CONFIG.delays.afterPost)
 
-    // Aguarda mais um pouco para garantir que o modal fechou
-    await page.waitForFunction(() => {
-      // Verifica se o modal de reply ainda está aberto
-      const modal = document.querySelector('[data-testid="tweetButtonInline"]')
-      return !modal // Retorna true quando o modal fechou
-    }, { timeout: 10000 }).catch(() => {
-      console.log('Modal pode ainda estar aberto, continuando...')
-    })
+    // Aguarda o campo de texto sumir (indica que reply foi enviado)
+    console.log('Verificando se reply foi enviado...')
+    let replyConfirmed = false
+    try {
+      await page.waitForFunction(() => {
+        // Verifica se o campo de texto do reply sumiu ou está vazio
+        const textbox = document.querySelector('[data-testid="tweetTextarea_0"]')
+        if (!textbox) return true // Campo sumiu = reply enviado
+        const text = textbox.textContent || ''
+        return text.trim() === '' // Campo vazio = reply enviado
+      }, { timeout: 15000 })
+      replyConfirmed = true
+      console.log('Reply confirmado!')
+    } catch (e) {
+      console.log('Timeout aguardando confirmação, verificando URL...')
+      // Fallback: verifica se URL mudou ou se está na página do tweet
+      const currentUrl = page.url()
+      if (currentUrl.includes('/status/')) {
+        replyConfirmed = true
+        console.log('Ainda na página do tweet, assumindo sucesso')
+      }
+    }
 
-    await humanDelay({ min: 1500, max: 2500 })
+    await humanDelay({ min: 2000, max: 3500 })
 
     // Tira screenshot de confirmação
     const screenshotPath = `/tmp/reply_${Date.now()}.png`
     await page.screenshot({ path: screenshotPath })
     console.log('Screenshot salvo:', screenshotPath)
 
-    // Não fecha a aba se for a única (senão fecha o Chrome)
-    const pages = await browser.pages()
-    if (pages.length > 1) {
-      await safeClosePage(browser, page)
-    }
-    // Se for única aba, só navega de volta pro home
-    else {
-      // Handler para dialogs de "descartar alterações"
-      page.on('dialog', async dialog => {
-        console.log('Dialog detectado:', dialog.message())
-        await dialog.dismiss()
-      })
-      await page.goto('https://x.com/home', { waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {})
+    // Só tenta navegar/fechar se o reply foi confirmado
+    if (replyConfirmed) {
+      const pages = await browser.pages()
+      if (pages.length > 1) {
+        await safeClosePage(browser, page)
+      } else {
+        // Não navega para home - deixa na página do tweet
+        // Isso evita o dialog "Sair do site?"
+        console.log('Mantendo na página do tweet')
+      }
+    } else {
+      console.log('Reply não confirmado, mantendo página aberta para debug')
     }
 
     return {

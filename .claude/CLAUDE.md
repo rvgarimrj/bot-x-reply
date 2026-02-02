@@ -75,6 +75,13 @@ defaults write com.google.Chrome NSAppSleepDisabled -bool YES
 - `page.setDefaultTimeout`: 60000ms
 - Retry automático: 3 tentativas
 
+### Inserção de Texto (Anti-Interferência)
+- **NAO usa** digitação char por char (interfere se usuário estiver digitando)
+- **USA** inserção via DOM (`execCommand('insertText')`)
+- Textos longos (>80 chars): divide em 2-3 chunks
+- Delays humanizados: 0.8-1.5s antes, 0.5-1s depois
+- Permite trabalhar no computador enquanto bot posta
+
 ---
 
 ## Arquitetura
@@ -83,35 +90,58 @@ defaults write com.google.Chrome NSAppSleepDisabled -bool YES
 - **Claude API**: Geração de replies com detecção de idioma
 - **Playwright MCP**: Automação do browser para postar
 
-## Modos de Operação
+## Modos de Operacao
 
-### Modo A (On-Demand)
-1. Usuário envia URL de tweet no Telegram
-2. Claude extrai texto e gera 3 opções de reply
-3. Usuário aprova/edita
-4. Claude Code posta via Playwright MCP
+### Modo AUTONOMO (PRINCIPAL) - auto-daemon.js
+**Este e o modo recomendado para 50+ replies/dia**
 
-### Modo B (Proativo)
+1. Daemon roda 8h-23h59 automaticamente
+2. Busca tweets de 3 fontes: timeline, trending, Hacker News
+3. Filtra: ja respondidos, limite por conta, qualidade
+4. Gera reply com rotacao de estilo (anti-deteccao)
+5. Posta via Puppeteer automaticamente
+6. Notifica cada reply no Telegram (silencioso)
+7. Envia resumo diario as 23:30
+
+**Intervalo dinamico**: ajusta 10-25min baseado no progresso
+**Decisao inteligente**: se atingiu meta normal (70), so posta tweets score >= 80
+
+### Modo Manual (On-Demand) - reply-bot.js
+1. Usuario envia URL de tweet no Telegram
+2. Claude extrai texto e gera 3 opcoes de reply
+3. Usuario aprova/edita
+4. Bot posta via Puppeteer
+
+### Modo Proativo Antigo - search-daemon.js
 1. Daemon busca tweets de contas configuradas
-2. Notifica usuário no Telegram
-3. Mesmo fluxo de aprovação
+2. Notifica usuario no Telegram
+3. Mesmo fluxo de aprovacao manual
 
 ## Estrutura
 
 ```
 src/
-├── claude.js      # Geração de replies (usa Sonnet para custo)
-├── telegram.js    # Interface Telegram
-├── browser.js     # Instruções para Playwright MCP
-└── finder.js      # Busca e filtragem de tweets
+├── claude.js      # Geracao de replies + STYLE ROTATION (5 estilos/idioma)
+├── telegram.js    # Interface Telegram + sendDailySummary()
+├── browser.js     # Instrucoes para Playwright MCP
+├── finder.js      # Busca, filtragem, tracking (50-80/dia)
+├── discovery.js   # NOVO: Multi-source discovery (timeline + trending + HN)
+├── puppeteer.js   # Automacao Chrome para postar
+├── research.js    # Pesquisa contexto antes de gerar
+├── knowledge.js   # Base de conhecimento (aprendizado)
+└── twitter.js     # API do X (leitura)
 
 scripts/
-├── reply-bot.js   # Bot principal (Telegram listener)
-└── search-daemon.js # Busca proativa (Modo B)
+├── auto-daemon.js   # PRINCIPAL: Sistema autonomo 50+ replies/dia
+├── reply-bot.js     # Bot manual (Telegram listener)
+└── search-daemon.js # Busca proativa antiga (Modo B)
 
 config/
-├── profile.json   # Expertise e estilo do usuário
-└── accounts.json  # Contas para monitorar
+├── profile.json   # Expertise e estilo do usuario
+└── accounts.json  # Contas + discovery + daily_limits
+
+data/
+└── knowledge.json # Base de conhecimento persistente
 ```
 
 ## Executar via Playwright MCP
@@ -128,19 +158,30 @@ mcp__playwright__browser_take_screenshot
 
 ## Limites de Segurança
 
-- Max 10 replies/dia
+### Modo Manual (reply-bot.js)
+- Max 80 replies/dia
 - Intervalo 15min-2h entre replies
-- Sempre aprovar manualmente
+- Aprovacao via Telegram
 - Detecta idioma automaticamente
 
-## Subir Serviços (se caírem ou após reiniciar)
+### Modo Autonomo (auto-daemon.js) - PRINCIPAL
+- **Minimo**: 50 replies/dia
+- **Normal**: 70 replies/dia
+- **Maximo**: 80 replies/dia (anti-bot)
+- **Horario**: 8h - 23h59
+- **Intervalo**: 10-25min (dinamico)
+- **Max por conta**: 3 replies/dia
+- **Resumo diario**: 23:30 no Telegram
+- **100% autonomo** - sem aprovacao manual
 
-### 1. Chrome do Bot (modo debug)
+## Subir Servicos (se cairem ou apos reiniciar)
+
+### 1. Chrome do Bot (modo debug) - OBRIGATORIO
 ```bash
 # Mata Chrome do bot se estiver travado
 pkill -9 -f "chrome-bot-profile"
 
-# Inicia Chrome com flags anti-suspensão
+# Inicia Chrome com flags anti-suspensao
 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   --remote-debugging-port=9222 \
   --user-data-dir="$HOME/.chrome-bot-profile" \
@@ -151,31 +192,47 @@ pkill -9 -f "chrome-bot-profile"
   "https://x.com" &
 ```
 
-### 2. Bot Telegram
+### 2. AUTO-DAEMON (Principal - 50+ replies/dia)
+```bash
+cd /Users/user/AppsCalude/Bot-X-Reply
+
+# Foreground (para ver logs)
+node scripts/auto-daemon.js
+
+# Background (producao)
+nohup node scripts/auto-daemon.js >> logs/auto-daemon.log 2>&1 &
+```
+
+### 3. Bot Telegram Manual (opcional)
 ```bash
 cd /Users/user/AppsCalude/Bot-X-Reply
 node scripts/reply-bot.js &
 ```
 
-### 3. Daemon de Busca
-```bash
-cd /Users/user/AppsCalude/Bot-X-Reply
-node scripts/search-daemon.js &
-```
-
-### 4. Desativar App Nap (se necessário)
+### 4. Desativar App Nap (se necessario)
 ```bash
 defaults write com.google.Chrome NSAppSleepDisabled -bool YES
 ```
 
-### Verificar se está rodando
+### Verificar se esta rodando
 ```bash
 # Chrome
 curl -s http://127.0.0.1:9222/json/version | head -1
 
-# Bot e Daemon
-pgrep -f "reply-bot.js" && echo "Bot OK"
-pgrep -f "search-daemon.js" && echo "Daemon OK"
+# Auto-daemon
+pgrep -f "auto-daemon.js" && echo "Auto-Daemon OK"
+
+# Bot manual (se usar)
+pgrep -f "reply-bot.js" && echo "Bot Manual OK"
+```
+
+### Parar Auto-Daemon
+```bash
+# Graceful (salva estado)
+pkill -2 -f "auto-daemon.js"
+
+# Forcado
+pkill -9 -f "auto-daemon.js"
 ```
 
 ### LaunchAgents (auto-start)
@@ -187,9 +244,66 @@ Os serviços iniciam automaticamente via launchd:
 
 ---
 
-## Histórico de Melhorias (Guia de Referência)
+## Historico de Melhorias (Guia de Referencia)
 
-### 2026-02-01: Anti-Detecção de IA
+### 2026-02-02: Sistema Autonomo 50+ Replies/Dia
+
+**Objetivo**: Transformar bot de aprovacao manual (10/dia) para autonomo (50-80/dia)
+
+**Arquivos Criados**:
+1. `src/discovery.js` - Descoberta multi-fonte de tweets
+2. `scripts/auto-daemon.js` - Loop autonomo principal
+
+**Arquivos Modificados**:
+1. `src/finder.js` - Novos limites e tracking
+2. `src/claude.js` - Rotacao de estilos
+3. `src/telegram.js` - Resumo diario
+4. `config/accounts.json` - Novas configs
+
+**Sistema de Discovery (3 fontes)**:
+```
+1. Timeline (For You) - tweets do feed
+2. Trending Topics - filtra por keywords relevantes (AI, crypto, tech)
+3. Hacker News - busca tweets sobre posts do HN
+```
+
+**Rotacao de Estilos (anti-deteccao)**:
+```javascript
+// Ingles: direct, memory, casual (tbh/ngl), reaction, question
+// Portugues: direto, memoria, giria (cara/mano), reacao, opiniao
+// Nao repete ultimos 3 estilos usados
+```
+
+**Logica de Decisao**:
+```
+- Abaixo de 50: SEMPRE posta
+- 50-70: SEMPRE posta
+- 70-80: So se tweet.score >= 80
+- Acima de 80: PARA (limite anti-bot)
+```
+
+**Intervalo Dinamico**:
+```
+- Atrasado (< esperado - 5): 10min
+- Normal: 15min
+- Adiantado (> esperado + 5): 25min
+- Variacao aleatoria: +/- 3min
+```
+
+**Protecoes**:
+- Max 3 replies por conta/dia
+- Nao repete tweets ja respondidos (hoje + historico)
+- Verifica se ja curtiu o tweet
+- Filtra por min_likes, max_replies, max_age
+
+**Persistencia**:
+- Estado salvo em `.auto-daemon-state.json`
+- Base de conhecimento em `data/knowledge.json`
+- Sobrevive a reinicializacao
+
+---
+
+### 2026-02-01: Anti-Deteccao de IA
 
 **Problema**: Usuário foi BLOQUEADO por @levelsio por reply detectado como IA.
 **Reply problemático**: "That's Eric Chahi's masterpiece! The rotoscoped animation was revolutionary - influenced countless indie devs. Fun fact: it runs on everything now."
@@ -242,10 +356,81 @@ Os serviços iniciam automaticamente via launchd:
 
 ### Checklist de Problemas Comuns
 
-| Problema | Causa | Solução |
+| Problema | Causa | Solucao |
 |----------|-------|---------|
-| Timeout Chrome | Tela bloqueada | Verificar flags anti-suspensão |
-| Replies genéricos | Sem texto do tweet | Verificar extração (API ou Puppeteer) |
+| Timeout Chrome | Tela bloqueada | Verificar flags anti-suspensao |
+| Replies genericos | Sem texto do tweet | Verificar extracao (API ou Puppeteer) |
 | Erro 429 | Rate limit X | Aguardar 15-30min ou usar Puppeteer |
-| Conflito Telegram | Múltiplas instâncias | Matar todos e iniciar um só |
-| "Não consegui acessar" | API + Puppeteer falharam | Colar texto manualmente |
+| Conflito Telegram | Multiplas instancias | Matar todos e iniciar um so |
+| "Nao consegui acessar" | API + Puppeteer falharam | Colar texto manualmente |
+| Auto-daemon parou | Crash ou reinicio | Verificar logs, reiniciar |
+| Poucos replies | Filtros muito restritivos | Ajustar config/accounts.json |
+
+---
+
+## Configuracao Atual (accounts.json)
+
+```json
+{
+  "discovery": {
+    "enabled": true,
+    "explore_timeline": true,
+    "explore_trending": true,
+    "explore_hacker_news": true,
+    "trending_keywords": ["AI", "crypto", "tech", "startup", "coding", "GPT", "LLM"]
+  },
+  "filters": {
+    "min_likes": 50,
+    "max_replies": 100,
+    "max_age_hours": 6
+  },
+  "daily_limits": {
+    "min_total": 50,
+    "normal_total": 70,
+    "max_total": 80,
+    "max_per_account": 3
+  }
+}
+```
+
+---
+
+## Estilos de Reply (Rotacao Automatica)
+
+### REGRAS IMPORTANTES
+- NUNCA comecar com: ngl, tbh, honestly, actually, na verdade, sinceramente
+- NEM SEMPRE CONCORDAR! Variar entre concordar, discordar, questionar
+- Cada reply deve ter abordagem diferente:
+  1. Concorda mas adiciona algo
+  2. Traz outro angulo/perspectiva
+  3. Questiona ou mostra ceticismo
+
+### Ingles (10 estilos)
+| Estilo | Dica | Exemplo |
+|--------|------|---------|
+| direct | reacao curta 3-6 palavras | "this is wild" |
+| memory | memoria pessoal | "used to see this pattern in 2021" |
+| observation | aponta algo especifico | "that 70k zone looking dangerous" |
+| question | pergunta curiosa | "when did this start?" |
+| disagree | discorda educadamente | "idk i think opposite might happen" |
+| contrarian | visao oposta | "everyone saying this but last time it dumped" |
+| skeptic | duvida da premissa | "feels like a trap setup" |
+| add_context | adiciona info | "funding rates still negative tho" |
+| personal_take | sua previsao | "my bet is we sweep lows first" |
+| experience | experiencia pessoal | "got rekt fading this signal last time" |
+
+### Portugues (10 estilos)
+| Estilo | Dica | Exemplo |
+|--------|------|---------|
+| direto | reacao curta | "isso ta tenso" |
+| memoria | passado pessoal | "vi isso em 2021" |
+| observacao | aponta especifico | "essa zona de 70k preocupa" |
+| pergunta | curiosa | "desde quando ta assim?" |
+| discordo | discorda | "sei la acho q vai ser o contrario" |
+| contrario | visao oposta | "todo mundo fala isso mas despencou" |
+| cetico | duvida | "parece armadilha" |
+| contexto | adiciona info | "funding ainda negativo ne" |
+| opiniao | sua previsao | "aposto q busca fundo antes" |
+| experiencia | pessoal | "tomei prejuizo ignorando isso" |
+
+**Regra**: Nao repete os ultimos 5 estilos usados

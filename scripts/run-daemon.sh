@@ -4,8 +4,8 @@ cd /Users/user/AppsCalude/Bot-X-Reply
 # Carrega variáveis de ambiente
 export $(cat .env | grep -v '^#' | xargs)
 
-# Aguarda Chrome e bot estarem prontos
-sleep 20
+# Aguarda Chrome estar pronto
+sleep 30
 
-# Executa o daemon
-exec /usr/local/bin/node scripts/search-daemon.js
+# Executa o auto-daemon (sistema autonomo 50+ replies/dia)
+exec /usr/local/bin/node scripts/auto-daemon.js

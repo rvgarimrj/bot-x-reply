@@ -62,12 +62,25 @@
     }
   ],
   "niches": ["AI", "startups", "crypto", "dev tools", "indie hackers"],
+  "discovery": {
+    "enabled": true,
+    "explore_timeline": true,
+    "explore_trending": true,
+    "explore_hacker_news": true,
+    "trending_keywords": ["AI", "crypto", "tech", "startup", "coding", "dev", "bitcoin", "ethereum", "GPT", "LLM"]
+  },
   "filters": {
-    "min_likes": 100,
-    "max_replies": 50,
-    "max_age_hours": 4,
+    "min_likes": 10,
+    "max_replies": 200,
+    "max_age_hours": 12,
     "prefer_questions": true,
     "prefer_opinions": true
   },
-  "search_interval_minutes": 120
+  "daily_limits": {
+    "min_total": 50,
+    "normal_total": 70,
+    "max_total": 80,
+    "max_per_account": 3
+  },
+  "search_interval_minutes": 15
 }

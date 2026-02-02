@@ -182,11 +182,85 @@ export async function sendSuccessNotification(tweet, reply, screenshotPath = nul
  * Notifica erro
  */
 export async function sendError(error, context = '') {
-  const message = `<b>❌ Erro${context ? ` em ${context}` : ''}</b>
+  const message = `<b>Erro${context ? ` em ${context}` : ''}</b>
 
 ${escapeHtml(error.message || error)}`
 
   return sendMessage(message)
+}
+
+/**
+ * Envia resumo diario do bot autonomo
+ * @param {object} stats - Estatisticas do dia
+ */
+export async function sendDailySummary(stats) {
+  if (!bot) initBot({ polling: false })
+  if (!chatId) throw new Error('Chat ID nao configurado')
+
+  const date = new Date().toLocaleDateString('pt-BR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long'
+  })
+
+  // Monta lista de top contas
+  let topAccountsSection = ''
+  if (stats.topAccounts && stats.topAccounts.length > 0) {
+    topAccountsSection = stats.topAccounts
+      .slice(0, 5)
+      .map((a, i) => `   ${i + 1}. @${a.name} (${a.count})`)
+      .join('\n')
+  } else {
+    topAccountsSection = '   Nenhuma conta engajada'
+  }
+
+  // Breakdown de idiomas
+  const langBreakdown = stats.languageBreakdown || { en: 0, pt: 0, other: 0 }
+  const totalLang = langBreakdown.en + langBreakdown.pt + (langBreakdown.other || 0)
+
+  const message = `<b>Resumo Diario - ${date}</b>
+
+<b>Replies:</b> ${stats.repliesPosted || 0}
+<b>Erros:</b> ${stats.errors || 0}
+<b>Taxa de sucesso:</b> ${stats.successRate || 100}%
+
+<b>Top Contas:</b>
+${topAccountsSection}
+
+<b>Idiomas:</b>
+   EN: ${langBreakdown.en} | PT: ${langBreakdown.pt}${langBreakdown.other ? ` | Outros: ${langBreakdown.other}` : ''}
+
+<b>Operacao:</b> 8h - 23h59
+<i>Bot autonomo - sem intervencao manual</i>`
+
+  return bot.sendMessage(chatId, message, {
+    parse_mode: 'HTML',
+    disable_web_page_preview: true
+  })
+}
+
+/**
+ * Envia notificacao de reply postado automaticamente
+ */
+export async function sendAutoReplyNotification(tweet, reply, stats) {
+  if (!bot) initBot({ polling: false })
+  if (!chatId) throw new Error('Chat ID nao configurado')
+
+  const message = `<b>Auto-reply postado</b>
+
+<b>Tweet:</b> @${tweet.author}
+<i>"${escapeHtml(truncate(tweet.text, 100))}"</i>
+
+<b>Reply:</b>
+"${escapeHtml(reply)}"
+
+Replies hoje: ${stats.repliesPosted}/${stats.dailyTarget || 70}
+<a href="${tweet.url}">Ver tweet</a>`
+
+  return bot.sendMessage(chatId, message, {
+    parse_mode: 'HTML',
+    disable_web_page_preview: true
+  })
 }
 
 /**
@@ -265,6 +339,8 @@ export default {
   sendTweetsList,
   sendSuccessNotification,
   sendError,
+  sendDailySummary,
+  sendAutoReplyNotification,
   onCallback,
   onMessage,
   answerCallback,

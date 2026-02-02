@@ -19,6 +19,74 @@ try {
 }
 
 /**
+ * ESTILOS ROTATIVOS (anti-detecção de IA)
+ * IMPORTANTE: Variar muito! Nunca repetir padrões como "ngl", "tbh" em sequência
+ * IMPORTANTE: Nem sempre concordar! Dar opinião própria, discordar às vezes
+ * Cada estilo tem um nome, exemplo e dica para o prompt
+ */
+const STYLE_ROTATION = {
+  en: [
+    { name: 'direct', hint: 'super short reaction, 3-6 words only', example: 'this is wild' },
+    { name: 'memory', hint: 'personal memory, start with "i remember" or past tense', example: 'used to see this pattern back in 2021' },
+    { name: 'observation', hint: 'point out something specific you noticed', example: 'that 70k zone looking dangerous' },
+    { name: 'question', hint: 'genuine curious question', example: 'when did this start happening?' },
+    { name: 'disagree', hint: 'politely disagree or offer counter view', example: 'idk i think the opposite might happen' },
+    { name: 'contrarian', hint: 'take opposite stance with reason', example: 'everyone saying this but last time it dumped' },
+    { name: 'skeptic', hint: 'express doubt about the premise', example: 'feels like a trap setup' },
+    { name: 'add_context', hint: 'add missing info they didnt mention', example: 'worth noting funding rates are still negative' },
+    { name: 'personal_take', hint: 'your own opinion/prediction', example: 'my bet is we sweep lows first' },
+    { name: 'experience', hint: 'share what happened to you', example: 'got rekt last time i faded this signal' },
+  ],
+  pt: [
+    { name: 'direto', hint: 'reação curta, 3-6 palavras', example: 'isso ta tenso' },
+    { name: 'memória', hint: 'memória pessoal, passado', example: 'vi isso acontecer em 2021' },
+    { name: 'observação', hint: 'aponta algo específico', example: 'essa zona de 70k preocupa' },
+    { name: 'pergunta', hint: 'pergunta genuína curiosa', example: 'desde quando ta assim?' },
+    { name: 'discordo', hint: 'discorda educadamente', example: 'sei la acho q vai ser o contrario' },
+    { name: 'contrario', hint: 'visão oposta com razão', example: 'todo mundo falando isso mas ultima vez despencou' },
+    { name: 'cetico', hint: 'duvida da premissa', example: 'parece armadilha isso ai' },
+    { name: 'contexto', hint: 'adiciona info que faltou', example: 'funding ainda ta negativo ne' },
+    { name: 'opiniao', hint: 'sua previsão/opinião própria', example: 'aposto q vai buscar fundo antes' },
+    { name: 'experiencia', hint: 'compartilha o que aconteceu contigo', example: 'tomei no ** da ultima vez q ignorei isso' },
+  ]
+}
+
+/**
+ * Palavras/frases PROIBIDAS de começar reply (muito detectável como IA)
+ */
+const BANNED_STARTERS = {
+  en: ['ngl', 'tbh', 'honestly', 'actually', 'interestingly', 'fun fact'],
+  pt: ['na verdade', 'sinceramente', 'honestamente', 'curiosamente', 'basicamente']
+}
+
+/**
+ * Escolhe um estilo que não foi usado recentemente
+ */
+export function getStyleHint(language, lastStyles = []) {
+  const styles = STYLE_ROTATION[language] || STYLE_ROTATION.en
+  // Evita repetir os últimos 5 estilos usados (mais restritivo)
+  const available = styles.filter(s => !lastStyles.slice(-5).includes(s.name))
+  // Se todos foram usados recentemente, usa qualquer um exceto o último
+  const pool = available.length > 0 ? available : styles.filter(s => s.name !== lastStyles[lastStyles.length - 1])
+  const chosen = pool[Math.floor(Math.random() * pool.length)] || styles[0]
+  return chosen
+}
+
+/**
+ * Retorna lista de palavras proibidas por idioma
+ */
+export function getBannedStarters(language) {
+  return BANNED_STARTERS[language] || BANNED_STARTERS.en
+}
+
+/**
+ * Lista de estilos disponíveis por idioma
+ */
+export function getAvailableStyles(language) {
+  return (STYLE_ROTATION[language] || STYLE_ROTATION.en).map(s => s.name)
+}
+
+/**
  * Prompt do sistema - replies HUMANOS (anti-detecção de IA)
  */
 const REPLY_SYSTEM_PROMPT = `Você gera replies para Twitter que parecem 100% HUMANOS.
@@ -49,8 +117,9 @@ Ambos idiomas:
 COMO HUMANOS ESCREVEM:
 
 Em inglês:
-- "omg", "lol", "ngl", "tbh", "lowkey", "fr"
-- "this is so good", "wait what", "no way"
+- "yo", "lol", "lowkey", "fr", "damn", "wait"
+- "this is wild", "no way", "makes sense"
+- NUNCA comece com: "ngl", "tbh", "honestly", "actually" (muito IA)
 
 Em português:
 - "cara", "mano", "véi", "sério?", "nossa", "pô", "caramba"
@@ -78,6 +147,13 @@ REGRAS:
 2. TAMANHO: 50-150 chars (curto e direto)
 3. TOM: casual, como se fosse seu amigo respondendo
 4. CONTEÚDO: uma observação, opinião ou experiência - NÃO uma aula
+5. NEM SEMPRE CONCORDE! Às vezes:
+   - Discorde educadamente
+   - Questione a premissa
+   - Traga outro ângulo que ele não pensou
+   - Adicione contexto que falta
+   - Dê sua própria previsão/opinião
+6. NUNCA comece com: ngl, tbh, honestly, actually, na verdade, sinceramente
 
 FORMATO: 3 opções numeradas, cada uma com estilo diferente:
 1. [reação/opinião pessoal curta]
@@ -173,18 +249,33 @@ Tópico: ${topic.topic}. ${keyFact}
 `
   }
 
+  // STYLE ROTATION: Escolhe estilo diferente dos últimos usados
+  const lastStyles = context.lastStyles || []
+  const styleHint = getStyleHint(langInfo.language, lastStyles)
+  const styleSection = styleHint ? `
+ESTILO SUGERIDO para este reply: "${styleHint.name}"
+- ${styleHint.hint}
+- Exemplo: "${styleHint.example}"
+(Varie os 3 replies, mas priorize este estilo no primeiro)
+` : ''
+
   const userPrompt = `TWEET DE @${tweetAuthor}:
 "${tweetText}"
 ${researchSection}
 ${context.additionalContext ? `CONTEXTO: ${context.additionalContext}` : ''}
-
+${styleSection}
 IDIOMA: ${langInfo.language.toUpperCase()}
 ${languageInstruction}
 
-Gere 3 replies CURTOS e HUMANOS.
+Gere 3 replies CURTOS e HUMANOS - cada um com abordagem DIFERENTE:
+1. Um que CONCORDA mas adiciona algo
+2. Um que traz OUTRO ÂNGULO ou perspectiva diferente
+3. Um que QUESTIONA ou mostra ceticismo
+
+REGRAS:
 - Pareça uma pessoa real, não uma IA
-- Use conhecimento de forma SUTIL, não didática
-- Uma ideia por reply, não uma lista de fatos
+- NUNCA comece com: ngl, tbh, honestly, actually, na verdade
+- Uma ideia por reply, curto e direto
 - Casual, como conversa entre amigos
 
 Apenas as 3 opções numeradas:`
@@ -204,6 +295,7 @@ Apenas as 3 opções numeradas:`
       success: true,
       replies,
       language: langInfo.language,
+      suggestedStyle: styleHint?.name || null,
       research: researchContext,
       model: response.model,
       usage: response.usage
@@ -280,4 +372,4 @@ Responda APENAS com um JSON:
   }
 }
 
-export default { generateReplies, detectLanguage, analyzeTweetPotential }
+export default { generateReplies, detectLanguage, analyzeTweetPotential, getStyleHint, getAvailableStyles }

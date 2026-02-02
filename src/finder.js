@@ -17,6 +17,15 @@ try {
 }
 
 /**
+ * Configuração de limites diários
+ */
+const DAILY_LIMITS = {
+  min: 50,      // Mínimo obrigatório
+  normal: 70,   // Meta normal
+  max: 80       // Limite máximo (anti-bot)
+}
+
+/**
  * Estado do finder
  */
 const state = {
@@ -26,7 +35,12 @@ const state = {
   dailyStats: {
     date: new Date().toDateString(),
     repliesPosted: 0,
-    tweetsAnalyzed: 0
+    tweetsAnalyzed: 0,
+    errors: 0,
+    postsReplied: new Set(),         // URLs respondidos HOJE
+    accountsEngaged: new Map(),      // account -> count (max 3/dia)
+    stylesUsed: [],                  // Últimos 5 estilos usados
+    languageBreakdown: { en: 0, pt: 0, other: 0 }
   }
 }
 
@@ -39,27 +53,124 @@ function checkDailyReset() {
     state.dailyStats = {
       date: today,
       repliesPosted: 0,
-      tweetsAnalyzed: 0
+      tweetsAnalyzed: 0,
+      errors: 0,
+      postsReplied: new Set(),
+      accountsEngaged: new Map(),
+      stylesUsed: [],
+      languageBreakdown: { en: 0, pt: 0, other: 0 }
     }
+    state.processedTweets.clear() // Limpa URLs processados do dia anterior
   }
 }
 
 /**
- * Verifica se já atingiu limite diário
+ * Verifica se já atingiu limite diário máximo
  */
 export function canPostMore() {
   checkDailyReset()
-  const MAX_DAILY_REPLIES = 10
-  return state.dailyStats.repliesPosted < MAX_DAILY_REPLIES
+  return state.dailyStats.repliesPosted < DAILY_LIMITS.max
+}
+
+/**
+ * Retorna limites diários configurados
+ */
+export function getDailyLimits() {
+  return { ...DAILY_LIMITS }
+}
+
+/**
+ * Verifica se deve postar baseado no progresso e qualidade do tweet
+ */
+export function shouldPostReply(tweetScore = 50) {
+  checkDailyReset()
+  const count = state.dailyStats.repliesPosted
+  const HIGH_QUALITY_THRESHOLD = 80
+
+  if (count < DAILY_LIMITS.min) return true     // Ainda não atingiu mínimo
+  if (count >= DAILY_LIMITS.max) return false   // No limite máximo
+
+  // Entre min e normal: sempre posta
+  if (count < DAILY_LIMITS.normal) return true
+
+  // Entre normal e max: só se tweet for muito bom
+  return tweetScore >= HIGH_QUALITY_THRESHOLD
+}
+
+/**
+ * Verifica se pode engajar com uma conta específica (max 3/dia)
+ */
+export function canEngageAccount(username) {
+  checkDailyReset()
+  const count = state.dailyStats.accountsEngaged.get(username.toLowerCase()) || 0
+  return count < 3
+}
+
+/**
+ * Verifica se já respondeu a um tweet específico hoje
+ */
+export function hasRepliedToday(tweetUrl) {
+  checkDailyReset()
+  return state.dailyStats.postsReplied.has(tweetUrl)
 }
 
 /**
  * Registra um reply postado
  */
-export function recordReply(tweetUrl) {
+export function recordReply(tweetUrl, options = {}) {
   checkDailyReset()
   state.dailyStats.repliesPosted++
   state.processedTweets.add(tweetUrl)
+  state.dailyStats.postsReplied.add(tweetUrl)
+
+  // Registra conta engajada
+  if (options.author) {
+    const author = options.author.toLowerCase()
+    const count = state.dailyStats.accountsEngaged.get(author) || 0
+    state.dailyStats.accountsEngaged.set(author, count + 1)
+  }
+
+  // Registra idioma
+  if (options.language) {
+    const lang = options.language === 'en' || options.language === 'pt' ? options.language : 'other'
+    state.dailyStats.languageBreakdown[lang]++
+  }
+
+  // Registra estilo usado (mantém últimos 5)
+  if (options.style) {
+    state.dailyStats.stylesUsed.push(options.style)
+    if (state.dailyStats.stylesUsed.length > 5) {
+      state.dailyStats.stylesUsed.shift()
+    }
+  }
+}
+
+/**
+ * Registra um erro
+ */
+export function recordError(errorMsg) {
+  checkDailyReset()
+  state.dailyStats.errors++
+}
+
+/**
+ * Retorna estilos usados recentemente (para rotação)
+ */
+export function getRecentStyles() {
+  checkDailyReset()
+  return [...state.dailyStats.stylesUsed]
+}
+
+/**
+ * Retorna top contas engajadas no dia
+ */
+export function getTopAccountsEngaged(limit = 5) {
+  checkDailyReset()
+  const entries = Array.from(state.dailyStats.accountsEngaged.entries())
+  return entries
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([name, count]) => ({ name, count }))
 }
 
 /**
@@ -67,7 +178,17 @@ export function recordReply(tweetUrl) {
  */
 export function getDailyStats() {
   checkDailyReset()
-  return { ...state.dailyStats }
+  return {
+    date: state.dailyStats.date,
+    repliesPosted: state.dailyStats.repliesPosted,
+    tweetsAnalyzed: state.dailyStats.tweetsAnalyzed,
+    errors: state.dailyStats.errors,
+    languageBreakdown: { ...state.dailyStats.languageBreakdown },
+    topAccounts: getTopAccountsEngaged(5),
+    successRate: state.dailyStats.repliesPosted > 0
+      ? Math.round(((state.dailyStats.repliesPosted - state.dailyStats.errors) / state.dailyStats.repliesPosted) * 100)
+      : 100
+  }
 }
 
 /**
@@ -233,8 +354,15 @@ export function needsRefresh(intervalMinutes = 120) {
 
 export default {
   canPostMore,
+  shouldPostReply,
+  canEngageAccount,
+  hasRepliedToday,
   recordReply,
+  recordError,
   getDailyStats,
+  getDailyLimits,
+  getRecentStyles,
+  getTopAccountsEngaged,
   filterTweets,
   rankTweets,
   analyzeBestTweets,
