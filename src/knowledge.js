@@ -82,11 +82,18 @@ export function recordPostedReply(data) {
     replyText: data.replyText,
     replyIndex: data.replyIndex, // Qual opção foi escolhida (1, 2, 3)
     wasRecommended: data.wasRecommended, // Se era o recomendado
+    // Fonte do tweet (para learning system)
+    source: data.source || 'unknown',
+    inspirationTab: data.inspirationTab || null,
+    score: data.score || null,
+    style: data.style || null,
+    language: data.language || null,
     // Métricas (preenchidas depois)
     metrics: {
       likes: null,
       replies: null,
       impressions: null,
+      authorReplied: null,
       checkedAt: null
     },
     // Análise
