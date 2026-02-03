@@ -48,25 +48,50 @@ const CONFIG = {
   // Intervalos base (serão ajustados por horário de pico)
   intervalMinutes: {
     base: 14,
-    min: 10,
+    min: 8,
     max: 25
   },
-  // Horários de pico (mais engajamento = intervalos menores)
-  // Baseado em BR + USA timezones
+
+  // ============================================================
+  // HORÁRIOS OTIMIZADOS BR + USA (v2 - 2026-02-03)
+  // Baseado em: Sprout Social 2025, Buffer 2025, nossos dados
+  // ============================================================
+  // Conversão: 12h BR = 10h EST, 21h BR = 19h EST
   peakHours: {
-    // Pico máximo: BR almoço + USA manhã, BR fim de tarde + USA tarde
-    high: [12, 13, 14, 17, 18, 19, 20],
-    // Bom: BR manhã, BR noite
-    medium: [8, 9, 10, 21, 22, 23],
-    // Fraco: madrugada (não opera) e horários de transição
-    low: [11, 15, 16] // Transição
+    // GOLD: Ambos BR + USA em horário de pico
+    // 12-14h BR = 10h-12h EST (manhã/almoço USA)
+    // 20-21h BR = 18-19h EST (fim do dia USA)
+    gold: [12, 13, 14, 20, 21],
+
+    // HIGH: Pelo menos um em horário de pico
+    high: [11, 15, 16, 17, 19, 22],
+
+    // MEDIUM: Ambos ativos mas não pico
+    medium: [10, 18, 23],
+
+    // LOW: Apenas BR ativo
+    low: [8, 9]
   },
+
   // Intervalos por tipo de horário
   peakIntervals: {
-    high: { min: 10, base: 12, max: 15 },   // Pico: intervalo curto
-    medium: { min: 12, base: 15, max: 18 }, // Bom: intervalo médio
-    low: { min: 18, base: 22, max: 25 }     // Fraco: intervalo longo
+    gold: { min: 8, base: 10, max: 12 },    // MÁXIMO esforço
+    high: { min: 10, base: 12, max: 15 },   // Alto esforço
+    medium: { min: 12, base: 15, max: 18 }, // Esforço normal
+    low: { min: 18, base: 22, max: 25 }     // Economiza para horários melhores
   },
+
+  // Multiplicadores por dia da semana (0=Dom, 6=Sab)
+  dayMultipliers: {
+    0: 0.8,  // Domingo - nossos dados mostram 3.7 avg! Testar mais
+    1: 1.0,  // Segunda
+    2: 1.3,  // Terça - MELHOR
+    3: 1.3,  // Quarta - MELHOR
+    4: 1.3,  // Quinta - MELHOR
+    5: 1.0,  // Sexta
+    6: 0.7   // Sábado - pior engajamento
+  },
+
   highQualityThreshold: 80,
   summary: {
     hour: 23,
@@ -225,12 +250,28 @@ function getNextOperatingTime() {
  * Retorna o tipo de horário atual (high/medium/low)
  * Baseado nos horários de pico configurados
  */
+/**
+ * Retorna o tipo de horário atual (gold/high/medium/low)
+ * GOLD = BR + USA em pico simultâneo (máximo esforço!)
+ */
 function getCurrentPeakType() {
   const hour = new Date().getHours()
 
+  // GOLD: Horários de ouro - ambos mercados ativos em pico
+  if (CONFIG.peakHours.gold?.includes(hour)) return 'gold'
   if (CONFIG.peakHours.high.includes(hour)) return 'high'
   if (CONFIG.peakHours.medium.includes(hour)) return 'medium'
   return 'low'
+}
+
+/**
+ * Retorna o multiplicador do dia da semana atual
+ * Ter/Qua/Qui = 1.3x (mais replies)
+ * Sab = 0.7x (menos replies)
+ */
+function getDayMultiplier() {
+  const day = new Date().getDay()
+  return CONFIG.dayMultipliers?.[day] || 1.0
 }
 
 /**
@@ -242,12 +283,13 @@ function getOptimalIntervalConfig() {
 }
 
 /**
- * Calcula intervalo ate proximo reply baseado no progresso E horario de pico
+ * Calcula intervalo ate proximo reply baseado no progresso, horário e dia
  *
  * Lógica:
- * 1. Pega intervalos base do horário atual (pico vs normal)
- * 2. Ajusta baseado no progresso (atrasado = menor, adiantado = maior)
- * 3. Adiciona variação aleatória
+ * 1. Pega intervalos base do horário atual (gold/high/medium/low)
+ * 2. Ajusta pelo multiplicador do dia (Ter/Qua/Qui = mais replies)
+ * 3. Ajusta baseado no progresso (atrasado = menor, adiantado = maior)
+ * 4. Adiciona variação aleatória
  */
 function calculateNextInterval() {
   const stats = getDailyStats()
@@ -257,12 +299,17 @@ function calculateNextInterval() {
   // Pega config de intervalo para o horário atual
   const intervalConfig = getOptimalIntervalConfig()
   const peakType = getCurrentPeakType()
+  const dayMultiplier = getDayMultiplier()
+  const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab']
+  const dayName = dayNames[new Date().getDay()]
 
-  // Calcula progresso esperado
+  // Calcula progresso esperado (ajustado pelo dia)
   const now = new Date()
   const hoursElapsed = now.getHours() - CONFIG.operatingHours.start
   const totalHours = CONFIG.operatingHours.end - CONFIG.operatingHours.start
-  const expectedReplies = Math.floor((limits.normal / totalHours) * hoursElapsed)
+  // Em dias melhores (Ter/Qua/Qui), esperamos mais replies
+  const adjustedTarget = Math.floor(limits.normal * dayMultiplier)
+  const expectedReplies = Math.floor((adjustedTarget / totalHours) * hoursElapsed)
 
   let interval = intervalConfig.base
 
@@ -279,8 +326,9 @@ function calculateNextInterval() {
   const variance = Math.floor(Math.random() * 5) - 2
   interval = Math.max(intervalConfig.min, Math.min(intervalConfig.max, interval + variance))
 
-  // Log para debug
-  console.log(`Intervalo: ${interval}min (${peakType} peak, ${count}/${expectedReplies} esperados)`)
+  // Log detalhado para debug
+  const peakEmoji = { gold: '🥇', high: '🔥', medium: '📈', low: '📉' }
+  console.log(`Intervalo: ${interval}min | ${peakEmoji[peakType] || '•'} ${peakType.toUpperCase()} | ${dayName} (${dayMultiplier}x) | ${count}/${expectedReplies} replies`)
 
   return interval
 }

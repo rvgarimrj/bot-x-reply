@@ -236,6 +236,81 @@ node scripts/daily-optimizer.js --dry-run
 
 ---
 
+## ⏰ HORÁRIOS DE OURO - BR + USA (v2 - 2026-02-03)
+
+### Fontes de Pesquisa
+- [Sprout Social 2025](https://sproutsocial.com/insights/best-times-to-post-on-twitter/) - 2.7B engagements
+- [Buffer 2025](https://buffer.com/resources/best-time-to-post-on-twitter-x/) - 1M tweets
+- Nossos dados internos (130 replies)
+
+### Análise de Sobreposição BR (GMT-3) + USA (EST)
+
+| Hora BR | Hora EST | BR Ativo | USA Ativo | TIER |
+|---------|----------|----------|-----------|------|
+| 12h | 10h | Almoço | Pico manhã | 🥇 GOLD |
+| 13h | 11h | Pós-almoço | Pico | 🥇 GOLD |
+| 14h | 12h | Tarde | Almoço | 🥇 GOLD |
+| 20h | 18h | Noite | Fim expediente | 🥇 GOLD |
+| 21h | 19h | Noite pico | Noite | 🥇 GOLD |
+| 11h | 9h | Manhã | Início trabalho | 🔥 HIGH |
+| 15-17h | 13-15h | Tarde | Tarde | 🔥 HIGH |
+| 19h | 17h | Início noite | Fim tarde | 🔥 HIGH |
+| 22h | 20h | Noite | Noite | 🔥 HIGH |
+| 10h | 8h | Manhã | Início dia | 📈 MEDIUM |
+| 8-9h | 6-7h | Manhã cedo | Cedo demais | 📉 LOW |
+
+### Intervalos por Tier
+
+| Tier | Horários | Intervalo | Estratégia |
+|------|----------|-----------|------------|
+| 🥇 GOLD | 12, 13, 14, 20, 21 | 8-12min | MÁXIMO esforço! |
+| 🔥 HIGH | 11, 15, 16, 17, 19, 22 | 10-15min | Alto esforço |
+| 📈 MEDIUM | 10, 18, 23 | 12-18min | Normal |
+| 📉 LOW | 8, 9 | 18-25min | Economiza |
+
+### Multiplicadores por Dia da Semana
+
+| Dia | Multiplicador | Razão |
+|-----|---------------|-------|
+| Ter, Qua, Qui | **1.3x** | Pico global de engajamento |
+| Seg, Sex | 1.0x | Normal |
+| Dom | 0.8x | Nossos dados: 3.7 avg! Testar mais |
+| Sab | 0.7x | Pior engajamento |
+
+### Nossos Dados (130 replies analisados)
+
+```
+MELHORES HORÁRIOS (por avg likes):
+1. 21h - 1.3 avg likes (🥇 GOLD - noite BR = tarde USA)
+2. 12h - 0.9 avg likes (🥇 GOLD - almoço BR = manhã USA)
+3. 11h - 0.7 avg likes
+4. 14h - 0.6 avg likes (🥇 GOLD)
+5. 10h - 0.6 avg likes
+
+MELHORES DIAS:
+1. Domingo - 3.7 avg likes (poucos dados, testar mais!)
+2. Quinta - 1.3 avg likes
+3. Sexta - 1.0 avg likes
+```
+
+### Configuração Atual (auto-daemon.js)
+
+```javascript
+peakHours: {
+  gold: [12, 13, 14, 20, 21],    // BR almoço/noite + USA manhã/tarde
+  high: [11, 15, 16, 17, 19, 22],
+  medium: [10, 18, 23],
+  low: [8, 9]
+}
+
+dayMultipliers: {
+  2: 1.3, 3: 1.3, 4: 1.3,  // Ter/Qua/Qui
+  0: 0.8, 6: 0.7           // Dom/Sab
+}
+```
+
+---
+
 ## 🎯 ESTRATÉGIA v4: CONVERSAÇÃO > INFORMAÇÃO (2026-02-03)
 
 ### O PROBLEMA IDENTIFICADO

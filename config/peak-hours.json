@@ -1,0 +1,96 @@
+{
+  "version": 2,
+  "lastUpdated": "2026-02-03",
+  "description": "Horários otimizados para engajamento BR + USA",
+
+  "timezone": {
+    "primary": "America/Sao_Paulo",
+    "secondary": "America/New_York",
+    "offset_br": -3,
+    "offset_est": -5
+  },
+
+  "research_sources": [
+    "Sprout Social 2025 (2.7B engagements analyzed)",
+    "Buffer 2025 (1M tweets analyzed)",
+    "Hootsuite 2025",
+    "Nossos dados internos (130 replies)"
+  ],
+
+  "hours": {
+    "gold": {
+      "description": "Ambos BR + USA ativos em horário de pico",
+      "hours": [12, 13, 14, 20, 21],
+      "interval_minutes": { "min": 8, "base": 10, "max": 12 },
+      "priority_multiplier": 1.5,
+      "br_context": "Almoço/tarde + Noite",
+      "usa_context": "Manhã pico + Fim de tarde"
+    },
+    "high": {
+      "description": "Pelo menos um em horário de pico",
+      "hours": [11, 15, 16, 17, 19, 22],
+      "interval_minutes": { "min": 10, "base": 12, "max": 15 },
+      "priority_multiplier": 1.2
+    },
+    "medium": {
+      "description": "Ambos ativos mas não pico",
+      "hours": [10, 18, 23],
+      "interval_minutes": { "min": 12, "base": 15, "max": 18 },
+      "priority_multiplier": 1.0
+    },
+    "low": {
+      "description": "Apenas BR ativo ou horários fracos",
+      "hours": [8, 9],
+      "interval_minutes": { "min": 18, "base": 22, "max": 25 },
+      "priority_multiplier": 0.8
+    }
+  },
+
+  "days": {
+    "best": {
+      "days": [2, 3, 4],
+      "names": ["Terça", "Quarta", "Quinta"],
+      "multiplier": 1.3,
+      "reason": "Pico de engajamento global no Twitter"
+    },
+    "good": {
+      "days": [1, 5],
+      "names": ["Segunda", "Sexta"],
+      "multiplier": 1.0,
+      "reason": "Bom engajamento durante horário comercial"
+    },
+    "avoid": {
+      "days": [0, 6],
+      "names": ["Domingo", "Sábado"],
+      "multiplier": 0.7,
+      "reason": "Menor engajamento - mas nossos dados mostram Dom com 3.7 avg!"
+    }
+  },
+
+  "strategy": {
+    "daily_distribution": {
+      "gold_hours_target": "40%",
+      "high_hours_target": "35%",
+      "medium_hours_target": "20%",
+      "low_hours_target": "5%"
+    },
+    "weekend_strategy": "Reduzir volume mas manter qualidade alta",
+    "holiday_strategy": "Tratar como fim de semana"
+  },
+
+  "our_data_insights": {
+    "best_hour": 21,
+    "best_hour_avg_likes": 1.3,
+    "best_day": "Domingo",
+    "best_day_avg_likes": 3.7,
+    "note": "Domingo tem poucos dados mas alta média - testar mais"
+  },
+
+  "overlap_analysis": {
+    "12h_br": { "est": "10h", "br_activity": "Almoço", "usa_activity": "Pico manhã", "score": "GOLD" },
+    "13h_br": { "est": "11h", "br_activity": "Pós-almoço", "usa_activity": "Pico", "score": "GOLD" },
+    "14h_br": { "est": "12h", "br_activity": "Tarde", "usa_activity": "Almoço", "score": "GOLD" },
+    "20h_br": { "est": "18h", "br_activity": "Noite", "usa_activity": "Fim expediente", "score": "GOLD" },
+    "21h_br": { "est": "19h", "br_activity": "Noite pico", "usa_activity": "Noite", "score": "GOLD" }
+  }
+}
