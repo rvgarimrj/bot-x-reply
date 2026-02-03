@@ -71,6 +71,7 @@
     "explore_keyword_search": true,
     "explore_monitored_accounts": true,
     "explore_hype_mode": true,
+    "explore_app_targeting": true,
     "trending_keywords": ["AI", "crypto", "tech", "startup", "coding", "dev", "bitcoin", "ethereum", "GPT", "LLM"],
     "creator_inspiration": {
       "enabled": true,
@@ -118,6 +119,15 @@
     "always_in_peak_hours": true,
     "bonus_score": 35,
     "blocklist": ["bbb", "futebol", "política", "religião"]
+  },
+  "app_targeting": {
+    "enabled": true,
+    "api_url": "http://localhost:3001/api/targeting",
+    "sync_interval_hours": 6,
+    "keywords_per_cycle": 2,
+    "bonus_score": 30,
+    "urgent_bonus": 15,
+    "max_replies_per_app_per_day": 5
   },
   "filters": {
     "min_likes": 10,

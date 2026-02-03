@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { getRepliedTweetUrls } from './knowledge.js'
 import { hasRepliedToday, canEngageAccount } from './finder.js'
+import * as targeting from './targeting.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -255,6 +256,20 @@ function calculateScore(tweet, config) {
   if (tweet.source === 'hype_mode') {
     score += 35 // Alto engajamento compensa
     if (tweet.isOutsideNiche) score -= 10 // Pequena penalidade por estar fora do nicho
+  }
+
+  // App Targeting (keywords dos MVPs ativos)
+  if (tweet.source === 'app_targeting') {
+    score += 30 // Alto valor: pode converter em usuário do app
+    // Bonus extra para apps urgentes (recém-lançados)
+    if (tweet.targetAppDaysActive && tweet.targetAppDaysActive <= 3) {
+      score += 15
+    }
+  }
+
+  // Bonus se tweet matcha keyword de app (qualquer fonte)
+  if (tweet.targetApp && tweet.source !== 'app_targeting') {
+    score += 15 // Match com targeting de app
   }
 
   return Math.round(score)
@@ -945,14 +960,158 @@ export async function findHighEngagementTweets(maxTweets = 3) {
     highEngagement.forEach(t => {
       t.source = 'hype_mode'
       t.isOutsideNiche = !isRelevantTweet(t.text)
+
+      // Verifica se matcha alguma keyword de app (Hype Mode Inteligente)
+      const match = targeting.matchTweet(t.text)
+      if (match) {
+        t.targetApp = match.appSlug
+        t.targetAppName = match.appName
+        t.targetKeyword = match.keyword
+        t.isOutsideNiche = false // Se matcha app, não é fora do nicho
+      }
+    })
+
+    // Ordena: tweets que matcham targeting primeiro
+    highEngagement.sort((a, b) => {
+      const aMatch = a.targetApp ? 1 : 0
+      const bMatch = b.targetApp ? 1 : 0
+      if (aMatch !== bMatch) return bMatch - aMatch // Match primeiro
+      return b.likes - a.likes // Empate: mais likes
     })
 
     console.log(`HypeMode: ${highEngagement.length} tweets de alto engajamento encontrados`)
+    const matchCount = highEngagement.filter(t => t.targetApp).length
+    if (matchCount > 0) {
+      console.log(`HypeMode: ${matchCount} matcham targeting de apps!`)
+    }
 
     return highEngagement.slice(0, maxTweets).map(t => ({ ...t, score: calculateScore(t, config) }))
 
   } catch (error) {
     console.error('HypeMode erro:', error.message)
+    return []
+  }
+}
+
+/**
+ * FONTE 8: App Targeting - Busca por keywords dos MVPs ativos
+ * Usa dados da API de Targeting para buscar tweets relevantes aos apps
+ * As queries já vêm otimizadas da API
+ */
+export async function findTargetingTweets(maxTweets = 5) {
+  // Verifica se tem queries disponíveis (já otimizadas pela API)
+  const queries = targeting.getSearchQueries(2, 'pt-BR')
+
+  if (queries.length === 0) {
+    console.log('AppTargeting: nenhuma query disponível (sync necessário?)')
+    return []
+  }
+
+  console.log(`AppTargeting: buscando ${queries.length} queries...`)
+
+  const browser = await getBrowser()
+  const allTweets = []
+
+  try {
+    const page = await browser.newPage()
+    await page.setViewport({ width: 1280, height: 800 })
+
+    for (const q of queries) {
+      try {
+        console.log(`AppTargeting: "${q.query}" (${q.appName}, urgency: ${q.urgencyScore})`)
+
+        // Query já otimizada pela API, adiciona min_faves baseado na urgência
+        const minFaves = q.urgencyScore > 70 ? 30 : 50
+        const searchQuery = `${q.query} min_faves:${minFaves}`
+        const searchUrl = `https://x.com/search?q=${encodeURIComponent(searchQuery)}&src=typed_query&f=live`
+        await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 30000 })
+        await randomDelay(2000, 3000)
+
+        // Scroll para carregar mais
+        await page.evaluate(() => window.scrollBy(0, 500))
+        await randomDelay(1000, 1500)
+
+        const tweets = await page.evaluate((queryData) => {
+          const results = []
+          const articles = document.querySelectorAll('article[data-testid="tweet"]')
+
+          articles.forEach((article, index) => {
+            if (index >= 8) return
+
+            try {
+              const textEl = article.querySelector('[data-testid="tweetText"]')
+              const text = textEl?.textContent?.trim() || ''
+
+              const alreadyLiked = !!article.querySelector('[data-testid="unlike"]')
+              if (alreadyLiked) return
+
+              const authorEl = article.querySelector('[data-testid="User-Name"] a')
+              const authorHref = authorEl?.href || ''
+              const authorMatch = authorHref.match(/x\.com\/(\w+)/)
+              const author = authorMatch ? authorMatch[1] : ''
+
+              const timeEl = article.querySelector('time')
+              const linkEl = timeEl?.closest('a')
+              const url = linkEl?.href || ''
+              const datetime = timeEl?.getAttribute('datetime') || ''
+
+              const getMetric = (testId) => {
+                const el = article.querySelector(`[data-testid="${testId}"]`)
+                const text = el?.textContent || '0'
+                const match = text.match(/[\d,.]+[KMB]?/i)
+                if (!match) return 0
+                let num = match[0].replace(/,/g, '')
+                if (num.includes('K')) num = parseFloat(num) * 1000
+                else if (num.includes('M')) num = parseFloat(num) * 1000000
+                else num = parseInt(num) || 0
+                return num
+              }
+
+              if (text && url && author) {
+                results.push({
+                  author,
+                  text: text.slice(0, 500),
+                  url,
+                  datetime,
+                  likes: getMetric('like'),
+                  replies: getMetric('reply'),
+                  retweets: getMetric('retweet'),
+                  source: 'app_targeting',
+                  targetApp: queryData.appSlug,
+                  targetAppName: queryData.appName,
+                  targetKeyword: queryData.query,
+                  targetAppUrgency: queryData.urgencyScore,
+                  targetPortfolioUrl: queryData.portfolioUrl
+                })
+              }
+            } catch (e) {}
+          })
+
+          return results
+        }, q)
+
+        // Adiciona info do app
+        const app = targeting.getAppBySlug(q.appSlug)
+        tweets.forEach(t => {
+          t.targetAppDaysActive = app?.daysActive || 0
+          t.targetAppUrgency = app?.urgencyScore || 0
+        })
+
+        allTweets.push(...tweets)
+        await randomDelay(1500, 2500)
+
+      } catch (e) {
+        console.log(`AppTargeting "${q.keyword}" erro:`, e.message)
+      }
+    }
+
+    await safeClosePage(browser, page)
+    console.log(`AppTargeting: ${allTweets.length} tweets totais`)
+
+    return allTweets.slice(0, maxTweets).map(t => ({ ...t, score: calculateScore(t, config) }))
+
+  } catch (error) {
+    console.error('AppTargeting erro:', error.message)
     return []
   }
 }
@@ -965,7 +1124,7 @@ export async function findHighEngagementTweets(maxTweets = 3) {
  * @returns {Promise<Array>} - Tweets ordenados por score
  */
 export async function discoverTweets(maxTweets = 10, options = {}) {
-  console.log('\n=== DISCOVERY: Buscando tweets de 7 fontes (sequencial) ===')
+  console.log('\n=== DISCOVERY: Buscando tweets de 8 fontes (sequencial) ===')
 
   // Verifica configurações
   const discoveryConfig = config.discovery || {}
@@ -973,6 +1132,7 @@ export async function discoverTweets(maxTweets = 10, options = {}) {
   const useKeywordSearch = discoveryConfig.explore_keyword_search !== false
   const useMonitoredAccounts = discoveryConfig.explore_monitored_accounts !== false
   const useHypeMode = discoveryConfig.explore_hype_mode !== false
+  const useAppTargeting = discoveryConfig.explore_app_targeting !== false
 
   // IMPORTANTE: Rodamos em SÉRIE (uma por vez) para evitar abrir muitas abas
   // Cada função abre uma aba, usa, e fecha antes da próxima
@@ -1039,6 +1199,16 @@ export async function discoverTweets(maxTweets = 10, options = {}) {
       allTweets.push(...tweets)
     } catch (e) {
       console.log('HypeMode erro:', e.message)
+    }
+  }
+
+  // 8. App Targeting (NOVO - keywords dos MVPs)
+  if (useAppTargeting) {
+    try {
+      const tweets = await findTargetingTweets(5)
+      allTweets.push(...tweets)
+    } catch (e) {
+      console.log('AppTargeting erro:', e.message)
     }
   }
 
@@ -1546,6 +1716,7 @@ export default {
   findTweetsFromKeywordSearch,
   findTweetsFromMonitoredAccounts,
   findHighEngagementTweets,
+  findTargetingTweets,
   checkAuthorEngagement,
   reloadConfig
 }

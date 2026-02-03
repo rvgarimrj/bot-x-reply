@@ -858,12 +858,111 @@ data/
 │   ├── patterns{}     # Padrões identificados
 │   └── lastUpdated    # Timestamp
 │
-└── learnings.json     # ~10KB (insights consolidados)
-    ├── insights[]     # Últimos 50 insights
-    ├── patterns{}     # Melhores fontes/horários/estilos
-    ├── recommendations[] # Ações pendentes
-    └── changelog[]    # Histórico de análises
+├── learnings.json     # ~10KB (insights consolidados)
+│   ├── insights[]     # Últimos 50 insights
+│   ├── patterns{}     # Melhores fontes/horários/estilos
+│   ├── recommendations[] # Ações pendentes
+│   └── changelog[]    # Histórico de análises
+│
+└── targeting-cache.json  # Cache da API Bot-Ultra-Power
+    ├── lastSync       # Última sincronização
+    ├── apps[]         # Apps ativos com keywords/audiência
+    └── twitterAccounts[] # Contas para monitorar
 ```
+
+---
+
+## 🔗 INTEGRAÇÃO COM TARGETING API (Bot-Ultra-Power)
+
+### O que é
+O Bot-X-Reply sincroniza com a API do Bot-Ultra-Power para:
+1. **Buscar keywords dos apps ativos** - Usa keywords dos MVPs para encontrar tweets relevantes
+2. **Monitorar contas Twitter** - Contas relacionadas aos apps para responder
+3. **Rastrear performance por app** - Qual app gera mais engajamento
+
+### API Endpoint
+```
+https://gabrielabiramia-dashboard-production.up.railway.app/api/targeting
+```
+
+### Dados Sincronizados
+```javascript
+// data/targeting-cache.json
+{
+  "lastSync": "2026-02-03T02:25:04.520Z",
+  "apps": [
+    {
+      "slug": "wikiscroll",
+      "name": "WikiScroll",
+      "score": 85,
+      "expiresAt": "2026-02-07",
+      "keywords": {
+        "pt-BR": { "primary": ["educação", "aprendizado"], "hashtags": ["#Educação"] },
+        "en-US": { "primary": ["education", "learning"], "hashtags": ["#Education"] }
+      },
+      "targetAudience": {
+        "quantity": "50M+",
+        "painPoint": "Falta de tempo para ler artigos longos"
+      }
+    }
+  ],
+  "twitterAccounts": [
+    { "username": "@productHunt", "appSlug": "wikiscroll", "priority": "high" }
+  ]
+}
+```
+
+### Sincronização Automática
+- **Frequência**: A cada 6 horas (se daemon estiver rodando)
+- **Trigger**: No início de cada ciclo do daemon
+- **Arquivo**: `src/targeting.js`
+
+### Como Verificar
+```bash
+# Ver cache atual
+cat data/targeting-cache.json | head -50
+
+# Ver apps sincronizados
+node -e "
+import { readFileSync } from 'fs'
+const cache = JSON.parse(readFileSync('data/targeting-cache.json'))
+console.log('Apps:', cache.apps?.length)
+console.log('Contas:', cache.twitterAccounts?.length)
+cache.apps?.forEach(a => console.log('-', a.name, '| expires:', a.expiresAt))
+"
+```
+
+---
+
+## 🤖 AUTOMAÇÃO COMPLETA (CRONTAB)
+
+### Jobs Configurados
+```bash
+# Ver crontab atual
+crontab -l
+
+# Resultado esperado:
+# 0 14 * * * cd /Users/user/AppsCalude/Bot-X-Reply && node scripts/collect-metrics.js
+# 0 22 * * * cd /Users/user/AppsCalude/Bot-X-Reply && node scripts/collect-metrics.js
+# 0 23 * * * cd /Users/user/AppsCalude/Bot-X-Reply && node scripts/analyze-and-learn.js
+```
+
+### Fluxo Diário Automatizado
+```
+08:00 → Daemon inicia (via LaunchAgent ou manual)
+14:00 → Crontab: collect-metrics.js (coleta likes/replies)
+22:00 → Crontab: collect-metrics.js (segunda coleta)
+23:00 → Crontab: analyze-and-learn.js (gera insights)
+23:30 → Daemon: envia resumo diário no Telegram
+```
+
+### O que Claude Recebe a Cada Sessão
+O hook `SessionStart` automaticamente mostra:
+- Status do daemon (rodando/parado)
+- Último reply (há quanto tempo)
+- Replies hoje vs histórico
+- Insights recentes
+- Recomendações pendentes
 
 ---
 

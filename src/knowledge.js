@@ -564,6 +564,107 @@ export function getSourcePriorityMultiplier(sourceData) {
   return 1.0 // Sem dados suficientes ou não está no top 3
 }
 
+// === APP TARGETING STATS ===
+
+/**
+ * Registra resultado de um reply em tweet relacionado a app
+ * @param {string} appSlug - Slug do app
+ * @param {object} data - { replied: boolean, likes: number, authorReplied: boolean }
+ */
+export function recordAppOutcome(appSlug, data = {}) {
+  const knowledge = loadKnowledge()
+
+  if (!knowledge.appStats) {
+    knowledge.appStats = {}
+  }
+
+  if (!knowledge.appStats[appSlug]) {
+    knowledge.appStats[appSlug] = {
+      matches: 0,
+      replies: 0,
+      totalLikes: 0,
+      authorReplies: 0,
+      estimatedFollows: 0,
+      lastUsed: null
+    }
+  }
+
+  const stats = knowledge.appStats[appSlug]
+
+  if (data.matched) stats.matches++
+  if (data.replied) {
+    stats.replies++
+    stats.lastUsed = new Date().toISOString()
+  }
+  if (data.likes) stats.totalLikes += data.likes
+  if (data.authorReplied) stats.authorReplies++
+  if (data.newFollows) stats.estimatedFollows += data.newFollows
+
+  saveKnowledge(knowledge)
+}
+
+/**
+ * Atualiza métricas de um app após coletar engajamento
+ */
+export function updateAppMetrics(appSlug, metrics) {
+  const knowledge = loadKnowledge()
+
+  if (!knowledge.appStats?.[appSlug]) return
+
+  const stats = knowledge.appStats[appSlug]
+
+  if (metrics.likes !== undefined) {
+    stats.totalLikes = (stats.totalLikes || 0) + metrics.likes
+  }
+
+  if (metrics.authorReplied) {
+    stats.authorReplies = (stats.authorReplies || 0) + 1
+  }
+
+  if (metrics.newFollows) {
+    stats.estimatedFollows = (stats.estimatedFollows || 0) + metrics.newFollows
+  }
+
+  saveKnowledge(knowledge)
+}
+
+/**
+ * Retorna estatísticas de todos os apps
+ */
+export function getAppStats() {
+  const knowledge = loadKnowledge()
+  return knowledge.appStats || {}
+}
+
+/**
+ * Retorna apps ordenados por performance
+ * Prioriza apps com maior taxa de author replies (75x boost!)
+ */
+export function getBestPerformingApps(limit = 5) {
+  const knowledge = loadKnowledge()
+  const stats = knowledge.appStats || {}
+
+  const appPerformance = Object.entries(stats)
+    .filter(([slug, data]) => data.replies >= 3) // Mínimo para ser relevante
+    .map(([slug, data]) => {
+      const authorReplyRate = data.replies > 0 ? data.authorReplies / data.replies : 0
+      const avgLikes = data.replies > 0 ? data.totalLikes / data.replies : 0
+
+      return {
+        slug,
+        replies: data.replies,
+        authorReplyRate: Math.round(authorReplyRate * 100) / 100,
+        avgLikes: Math.round(avgLikes * 10) / 10,
+        estimatedFollows: data.estimatedFollows,
+        // Performance score: author replies têm peso maior
+        performanceScore: (authorReplyRate * 100) + (avgLikes * 0.5) + (data.estimatedFollows * 10)
+      }
+    })
+    .sort((a, b) => b.performanceScore - a.performanceScore)
+
+  return appPerformance.slice(0, limit)
+}
+
 export default {
   loadKnowledge,
   saveKnowledge,
@@ -580,5 +681,10 @@ export default {
   updateSourceMetrics,
   getBestSources,
   getSourceStats,
-  getSourcePriorityMultiplier
+  getSourcePriorityMultiplier,
+  // App Targeting Stats
+  recordAppOutcome,
+  updateAppMetrics,
+  getAppStats,
+  getBestPerformingApps
 }

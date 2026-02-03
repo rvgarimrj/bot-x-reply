@@ -28,7 +28,8 @@ import {
   getDailyLimits,
   getRecentStyles
 } from '../src/finder.js'
-import { recordPostedReply, recordSourceOutcome, getBestSources } from '../src/knowledge.js'
+import { recordPostedReply, recordSourceOutcome, recordAppOutcome, getBestSources, getBestPerformingApps } from '../src/knowledge.js'
+import * as targeting from '../src/targeting.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -79,6 +80,7 @@ const CONFIG = {
 // Estado do daemon
 let isRunning = false
 let lastReplyTime = null
+let lastTargetingSync = null
 let summarySentToday = false
 let currentDate = new Date().toDateString()
 
@@ -171,6 +173,36 @@ function isSummaryTime() {
   if (summarySentToday) return false
   const now = new Date()
   return now.getHours() === CONFIG.summary.hour && now.getMinutes() >= CONFIG.summary.minute
+}
+
+/**
+ * Verifica se precisa sincronizar targeting (a cada 6h)
+ */
+function needsTargetingSync() {
+  if (!lastTargetingSync) return true
+  const hoursSinceSync = (Date.now() - lastTargetingSync) / (1000 * 60 * 60)
+  return hoursSinceSync >= 6
+}
+
+/**
+ * Sincroniza dados de targeting com API
+ */
+async function syncTargeting() {
+  try {
+    console.log('Sincronizando targeting...')
+    const result = await targeting.syncTargetingData()
+    lastTargetingSync = Date.now()
+
+    if (result.success) {
+      console.log(`Targeting: ${result.appsCount} apps sincronizados`)
+    } else if (result.usingCache) {
+      console.log(`Targeting: usando cache (${result.appsCount} apps)`)
+    } else {
+      console.log(`Targeting: erro - ${result.error}`)
+    }
+  } catch (e) {
+    console.log('Targeting sync erro:', e.message)
+  }
 }
 
 /**
@@ -354,6 +386,25 @@ async function runReplyCycle() {
           score: tweet.score
         })
 
+        // Registra app outcome se tweet tem targeting
+        if (tweet.targetApp) {
+          // Registra localmente
+          recordAppOutcome(tweet.targetApp, {
+            matched: true,
+            replied: true
+          })
+
+          // Envia feedback para API (async, não bloqueia)
+          const tweetId = tweet.url.split('/').pop()
+          targeting.sendFeedback(tweet.targetApp, tweetId, 'replied', {
+            locale: result.language === 'pt' ? 'pt-BR' : 'en-US',
+            searchQuery: tweet.targetKeyword,
+            reason: `Score: ${tweet.score}, Source: ${tweet.source}`
+          }).catch(() => {}) // Ignora erros de feedback
+
+          console.log(`App targeting: ${tweet.targetApp} (urgency: ${tweet.targetAppUrgency || 'N/A'})`)
+        }
+
         lastReplyTime = Date.now()
         saveState()
 
@@ -398,6 +449,11 @@ async function mainLoop() {
         console.log(`Aguardando ${conflict.waitMinutes + 1} minutos...`)
         await sleep((conflict.waitMinutes + 1) * 60 * 1000)
         continue // Volta pro inicio do loop
+      }
+
+      // Sync targeting se necessário (a cada 6h)
+      if (needsTargetingSync()) {
+        await syncTargeting()
       }
 
       // Executa ciclo
@@ -455,7 +511,20 @@ async function main() {
       console.log(`  ${i + 1}. ${s.source} (${s.posts} posts, ${s.authorReplyRate * 100}% author replies)`)
     })
   }
+
+  // Mostra melhores apps
+  const bestApps = getBestPerformingApps(3)
+  if (bestApps.length > 0) {
+    console.log('\nMelhores apps (targeting):')
+    bestApps.forEach((a, i) => {
+      console.log(`  ${i + 1}. ${a.slug} (${a.replies} replies, ${a.authorReplyRate * 100}% author replies)`)
+    })
+  }
   console.log('')
+
+  // Sync inicial de targeting
+  console.log('Sincronizando targeting...')
+  await syncTargeting()
 
   // Verifica variaveis de ambiente
   if (!process.env.TELEGRAM_CHAT_ID) {
