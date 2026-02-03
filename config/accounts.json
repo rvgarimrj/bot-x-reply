@@ -68,6 +68,9 @@
     "explore_trending": true,
     "explore_hacker_news": true,
     "explore_creator_inspiration": true,
+    "explore_keyword_search": true,
+    "explore_monitored_accounts": true,
+    "explore_hype_mode": true,
     "trending_keywords": ["AI", "crypto", "tech", "startup", "coding", "dev", "bitcoin", "ethereum", "GPT", "LLM"],
     "creator_inspiration": {
       "enabled": true,
@@ -75,6 +78,46 @@
       "countries": ["United States", "Brazil"],
       "check_author_engagement": false
     }
+  },
+  "keyword_search": {
+    "enabled": true,
+    "keywords_per_cycle": 2,
+    "bonus_score": 12
+  },
+  "monitor_accounts": {
+    "enabled": true,
+    "accounts_per_cycle": 3,
+    "accounts": [
+      { "username": "sama", "niche": "AI", "priority": "high" },
+      { "username": "karpathy", "niche": "AI", "priority": "high" },
+      { "username": "ylecun", "niche": "AI", "priority": "high" },
+      { "username": "paulg", "niche": "startups", "priority": "high" },
+      { "username": "naval", "niche": "philosophy", "priority": "high" },
+      { "username": "balajis", "niche": "tech", "priority": "high" },
+      { "username": "levelsio", "niche": "indie", "priority": "high" },
+      { "username": "marc_loub", "niche": "indie", "priority": "high" },
+      { "username": "TaviCosta", "niche": "macro", "priority": "high" },
+      { "username": "garrytan", "niche": "VC", "priority": "medium" },
+      { "username": "jason", "niche": "VC", "priority": "medium" },
+      { "username": "rrhoover", "niche": "product", "priority": "medium" },
+      { "username": "tdinh_me", "niche": "indie", "priority": "medium" },
+      { "username": "dannypostmaa", "niche": "indie", "priority": "medium" },
+      { "username": "swyx", "niche": "dev", "priority": "medium" },
+      { "username": "Investanswers", "niche": "crypto", "priority": "medium" },
+      { "username": "DocumentingBTC", "niche": "crypto", "priority": "medium" },
+      { "username": "intocryptoverse", "niche": "crypto", "priority": "medium" },
+      { "username": "APompliano", "niche": "crypto", "priority": "medium" },
+      { "username": "shl", "niche": "indie", "priority": "low" }
+    ]
+  },
+  "hype_mode": {
+    "enabled": true,
+    "min_likes": 1000,
+    "min_replies": 300,
+    "run_probability": 0.3,
+    "always_in_peak_hours": true,
+    "bonus_score": 35,
+    "blocklist": ["bbb", "futebol", "política", "religião"]
   },
   "filters": {
     "min_likes": 10,

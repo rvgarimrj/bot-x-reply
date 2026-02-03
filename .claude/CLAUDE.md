@@ -159,11 +159,11 @@ Um tweet com 5 replies onde o autor responde cada um
 
 **Conclusão**: Devemos priorizar tweets onde o **AUTOR RESPONDE os comentários**.
 
-### Sistema de 4 Fontes de Tweets
+### Sistema de 7 Fontes de Tweets (v3)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      DISCOVERY ENGINE v2                         │
+│                      DISCOVERY ENGINE v3                         │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  1. TIMELINE (For You)                                          │
@@ -178,14 +178,45 @@ Um tweet com 5 replies onde o autor responde cada um
 │     └─ API top stories → busca tweets relacionados              │
 │     └─ Score base: +15 (alta relevância tech)                   │
 │                                                                  │
-│  4. CREATOR INSPIRATION (NOVO!)                                 │
+│  4. CREATOR INSPIRATION                                         │
 │     └─ URL: x.com/i/jf/creators/inspiration/top_posts           │
 │     └─ Tweets curados pelo algoritmo do X                       │
 │     └─ Score base: +25 (+15 extra se tab "replies")             │
 │     └─ Fallback: busca "AI startup", "shipped product"          │
 │                                                                  │
+│  5. KEYWORD SEARCH (NOVO!)                                      │
+│     └─ Busca ativa por termos relevantes do nicho               │
+│     └─ Score base: +12                                          │
+│     └─ 2 keywords por ciclo (aleatorias)                        │
+│     └─ Queries: "AI startup", "just shipped", "bitcoin", etc.   │
+│                                                                  │
+│  6. MONITORED ACCOUNTS (NOVO!)                                  │
+│     └─ Contas importantes que NÃO seguimos                      │
+│     └─ Score base: +25 (high) / +15 (medium)                    │
+│     └─ 3 contas por ciclo (aleatorias)                          │
+│     └─ 20+ contas: sama, paulg, levelsio, karpathy, etc.        │
+│                                                                  │
+│  7. HYPE MODE (NOVO!)                                           │
+│     └─ Tweets com alto engajamento FORA do nicho                │
+│     └─ Score base: +35 (-10 se fora do nicho)                   │
+│     └─ Critério: likes > 1000 OU replies > 300                  │
+│     └─ Estratégia 70/30: roda 30% dos ciclos (100% em pico)     │
+│     └─ Blocklist: política, religião, BBB, futebol              │
+│                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+### Estratégia 70/30 (Nicho vs Hype)
+
+| Tipo | % | Critério | Objetivo |
+|------|---|----------|----------|
+| **Nicho** | 70% | Passa em RELEVANT_PATTERNS | Seguidores qualificados tech/AI/crypto |
+| **Hype** | 30% | likes > 1000 OU replies > 300 | Exposição para apps de público geral |
+
+**Por que Hype Mode?**
+- Portfolio de MVPs (Bot-Ultra-Power) com apps para diferentes públicos
+- Post fixado contém portfolio - qualquer seguidor pode descobrir apps
+- Maximiza seguidores qualificados (nicho) + exposição geral (hype)
 
 ### Sistema de Score Inteligente
 
@@ -198,12 +229,15 @@ likes/100 + retweets/10
 ━━━ RECÊNCIA ━━━
 < 1h:  +50  │  < 2h:  +40  │  < 4h:  +20  │  < 8h:  +10
 
-━━━ FONTE ━━━
-Timeline:           +0
-Trending:          +10
-HackerNews:        +15
+━━━ FONTE (7 fontes) ━━━
+Timeline:            +0
+Trending:           +10
+HackerNews:         +15
 Creator Inspiration: +25
   └─ Tab "replies": +15 extra (alta conversação!)
+Keyword Search:     +12 (NOVO!)
+Monitored Account:  +25 (high) / +15 (medium) (NOVO!)
+Hype Mode:          +35 (-10 se fora do nicho) (NOVO!)
 
 ━━━ AUTOR ENGAJADO ━━━
 (Se verificamos que autor responde comentários)
@@ -325,37 +359,53 @@ O sistema aprende automaticamente quais fontes geram mais engajamento:
 ### Comandos de Verificação (IMPORTANTE!)
 
 ```bash
-# 1. Verificar se o novo sistema está ativo
+# 1. Verificar se o novo sistema está ativo (7 fontes)
 node -e "import('./src/discovery.js').then(m => {
   console.log('Funções disponíveis:')
+  console.log('- findTweetsFromTimeline:', typeof m.findTweetsFromTimeline)
+  console.log('- findTrendingTweets:', typeof m.findTrendingTweets)
+  console.log('- findHackerNewsTweets:', typeof m.findHackerNewsTweets)
   console.log('- findCreatorInspirationTweets:', typeof m.findCreatorInspirationTweets)
-  console.log('- checkAuthorEngagement:', typeof m.checkAuthorEngagement)
-  console.log('- discoverTweets:', typeof m.discoverTweets)
+  console.log('- findTweetsFromKeywordSearch:', typeof m.findTweetsFromKeywordSearch)
+  console.log('- findTweetsFromMonitoredAccounts:', typeof m.findTweetsFromMonitoredAccounts)
+  console.log('- findHighEngagementTweets:', typeof m.findHighEngagementTweets)
 })"
 
-# 2. Testar discovery completo (4 fontes)
-node -e "import('./src/discovery.js').then(m => m.discoverTweets(5).then(t => {
+# 2. Testar discovery completo (7 fontes)
+node -e "import('./src/discovery.js').then(m => m.discoverTweets(15).then(t => {
   console.log('Tweets encontrados:', t.length)
   const sources = {}
   t.forEach(x => sources[x.source] = (sources[x.source]||0)+1)
   console.log('Por fonte:', sources)
-  console.log('Top tweet:', t[0]?.author, 'score:', t[0]?.score)
+  console.log('Top 5:', t.slice(0,5).map(x => x.author + ':' + x.score + ':' + x.source))
 }))"
 
-# 3. Testar Creator Inspiration com fallback
-node -e "import('./src/discovery.js').then(m => m.findCreatorInspirationTweets(3).then(t => {
-  console.log('Creator Inspiration:', t.length, 'tweets')
-  t.forEach(x => console.log('-', x.author, '| score:', x.score, '| tab:', x.inspirationTab))
+# 3. Testar Keyword Search
+node -e "import('./src/discovery.js').then(m => m.findTweetsFromKeywordSearch(3).then(t => {
+  console.log('Keyword Search:', t.length, 'tweets')
+  t.forEach(x => console.log('-', x.author, '| score:', x.score, '| query:', x.searchKeyword?.slice(0,30)))
 }))"
 
-# 4. Ver learning system (melhores fontes)
+# 4. Testar Monitored Accounts
+node -e "import('./src/discovery.js').then(m => m.findTweetsFromMonitoredAccounts(3).then(t => {
+  console.log('Monitored Accounts:', t.length, 'tweets')
+  t.forEach(x => console.log('-', x.author, '| score:', x.score, '| priority:', x.accountPriority))
+}))"
+
+# 5. Testar Hype Mode
+node -e "import('./src/discovery.js').then(m => m.findHighEngagementTweets(3).then(t => {
+  console.log('Hype Mode:', t.length, 'tweets')
+  t.forEach(x => console.log('-', x.author, '| score:', x.score, '| outsideNiche:', x.isOutsideNiche))
+}))"
+
+# 6. Ver learning system (melhores fontes)
 node -e "import('./src/knowledge.js').then(m => {
-  const best = m.getBestSources(5)
+  const best = m.getBestSources(7)
   console.log('Melhores fontes aprendidas:')
   best.forEach((s,i) => console.log((i+1)+'.', s.source, '- authorReplyRate:', s.authorReplyRate))
 })"
 
-# 5. Verificar se daemon está usando versão nova
+# 7. Verificar se daemon está usando versão nova
 ps aux | grep auto-daemon | grep -v grep
 # Se estiver rodando, reiniciar para usar código novo:
 # pkill -2 -f "auto-daemon.js" && sleep 2 && node scripts/auto-daemon.js
@@ -363,14 +413,15 @@ ps aux | grep auto-daemon | grep -v grep
 
 ### Métricas de Sucesso Esperadas
 
-| Métrica | Antes | Depois | Melhoria |
-|---------|-------|--------|----------|
-| Fontes de tweets | 3 | 4 | +33% |
-| Score médio dos tweets | ~60 | ~85 | +42% |
-| Tweets relevantes/ciclo | 3-5 | 8-12 | +140% |
-| Chance de reply do autor | ~5% | ~25% | +400% |
-| Boost algorítmico | 13x | até 75x | +477% |
-| Qualidade dos seguidores | média | alta | ↑↑↑ |
+| Métrica | v2 (4 fontes) | v3 (7 fontes) | Melhoria |
+|---------|---------------|---------------|----------|
+| Fontes de tweets | 4 | 7 | +75% |
+| Tweets por ciclo | 8-12 | 15-25 | +100% |
+| Contas alcançadas | ~20 | 50+ | +150% |
+| Score médio | ~85 | ~95 | +12% |
+| Diversidade | só quem segue | qualquer conta | ↑↑↑ |
+| Oportunidades virais | 0% | 30% | ∞ |
+| Qualidade seguidores | alta | alta + geral | balanceado |
 
 ---
 
@@ -384,11 +435,13 @@ node scripts/check-success.js
 ```
 
 **Testes executados:**
-1. ✅ Discovery com 4 fontes
+1. ✅ Discovery com 7 fontes
 2. ✅ Creator Inspiration + Fallback
-3. ✅ Learning System coletando dados
-4. ✅ Estatísticas do dia
-5. ✅ Filtro de keywords do nicho
+3. ✅ Keyword Search (busca ativa)
+4. ✅ Monitored Accounts (contas não seguidas)
+5. ✅ Hype Mode (alto engajamento)
+6. ✅ Learning System coletando dados
+7. ✅ Filtro de keywords do nicho
 
 ### Monitoramento Contínuo
 
@@ -419,16 +472,19 @@ node -e "import('./src/knowledge.js').then(m => {
 ### Sinais de Sucesso
 
 **✅ Funcionando bem se:**
-- Discovery busca de 4 fontes (ver "Por fonte:" nos logs)
-- Creator Inspiration usa fallback quando necessário
+- Discovery busca de 7 fontes (ver "Por fonte:" nos logs)
+- Keyword Search retorna tweets relevantes
+- Monitored Accounts captura tweets de contas importantes
+- Hype Mode ativa em horários de pico
 - Scores > 50 para tweets selecionados
 - Learning System registra sourceStats
 - Replies parecem humanos (sem flags de IA)
 
 **⚠️ Atenção se:**
-- Apenas 1-2 fontes retornando tweets
+- Apenas 1-3 fontes retornando tweets
 - Scores consistentemente < 30
 - Muitos erros nos logs
+- Hype Mode trazendo tweets da blocklist
 - 0 tweets encontrados frequentemente
 
 ### Próximos Passos (Checklist)
@@ -620,7 +676,8 @@ authorReplyRate = authorReplies / posts * 100
 | Author Reply Rate | >20% | `authorReplies / posts` |
 | Avg Likes | >5 | `totalLikes / posts` |
 | Posts/Dia | 50-80 | Resumo diário Telegram |
-| Fontes Ativas | 4 | `check-success.js` |
+| Fontes Ativas | 7 | `check-success.js` |
+| Contas Alcançadas | 50+ | Monitored + Hype |
 
 ### Alertas Automáticos
 
@@ -994,6 +1051,63 @@ Os serviços iniciam automaticamente via launchd:
 
 ## Historico de Melhorias (Guia de Referencia)
 
+### 2026-02-02 (v3): Expansão para 7 Fontes de Discovery
+
+**Objetivo**: Expandir alcance para contas que não seguimos, mantendo foco no nicho mas aproveitando oportunidades de alto engajamento.
+
+**Estratégia 70/30 (Nicho vs Hype)**:
+| Tipo | % | Critério | Objetivo |
+|------|---|----------|----------|
+| **Nicho** | 70% | Passa em RELEVANT_PATTERNS | Seguidores qualificados tech/AI/crypto |
+| **Hype** | 30% | likes > 1000 OU replies > 300 | Exposição para apps de público geral |
+
+**3 Novas Fontes**:
+
+1. **Keyword Search** (`findTweetsFromKeywordSearch()`)
+   - Busca ativa por termos relevantes
+   - 2 keywords por ciclo (aleatorias)
+   - Score bonus: +12
+   - Queries: "AI startup", "just shipped", "bitcoin", "vibe coding", etc.
+
+2. **Monitored Accounts** (`findTweetsFromMonitoredAccounts()`)
+   - Contas importantes que NÃO seguimos
+   - 20+ contas: sama, paulg, levelsio, karpathy, TaviCosta, etc.
+   - 3 contas verificadas por ciclo
+   - Score bonus: +25 (high) / +15 (medium)
+
+3. **Hype Mode** (`findHighEngagementTweets()`)
+   - Tweets com alto engajamento FORA do nicho
+   - Critério: likes > 1000 OU replies > 300
+   - Roda 30% dos ciclos, SEMPRE em horário de pico
+   - Blocklist: política, religião, BBB, futebol
+   - Score bonus: +35 (-10 se fora do nicho)
+
+**Arquivos Modificados**:
+- `src/discovery.js`: 3 novas funções, `discoverTweets()` para 7 fontes, `calculateScore()` atualizado
+- `config/accounts.json`: `keyword_search`, `monitor_accounts`, `hype_mode`
+- `.claude/CLAUDE.md`: documentação v3
+
+**Comandos de Teste**:
+```bash
+# Testar Keyword Search
+node -e "import('./src/discovery.js').then(m => m.findTweetsFromKeywordSearch(3).then(console.log))"
+
+# Testar Monitored Accounts
+node -e "import('./src/discovery.js').then(m => m.findTweetsFromMonitoredAccounts(3).then(console.log))"
+
+# Testar Hype Mode
+node -e "import('./src/discovery.js').then(m => m.findHighEngagementTweets(3).then(console.log))"
+
+# Discovery completo (7 fontes)
+node -e "import('./src/discovery.js').then(m => m.discoverTweets(15).then(t => {
+  const sources = {}
+  t.forEach(x => sources[x.source] = (sources[x.source]||0)+1)
+  console.log('Por fonte:', sources)
+}))"
+```
+
+---
+
 ### 2026-02-02 (v2): Creator Inspiration + Learning System
 
 **Objetivo**: Maximizar boost algoritmico priorizando tweets onde autor responde comentarios
@@ -1212,7 +1326,7 @@ Horarios Fracos:
 
 ---
 
-## Configuracao Atual (accounts.json)
+## Configuracao Atual (accounts.json) - v3
 
 ```json
 {
@@ -1222,6 +1336,9 @@ Horarios Fracos:
     "explore_trending": true,
     "explore_hacker_news": true,
     "explore_creator_inspiration": true,
+    "explore_keyword_search": true,
+    "explore_monitored_accounts": true,
+    "explore_hype_mode": true,
     "trending_keywords": ["AI", "crypto", "tech", "startup", "coding", "GPT", "LLM"],
     "creator_inspiration": {
       "enabled": true,
@@ -1229,6 +1346,31 @@ Horarios Fracos:
       "countries": ["United States", "Brazil"],
       "check_author_engagement": false
     }
+  },
+  "keyword_search": {
+    "enabled": true,
+    "keywords_per_cycle": 2,
+    "bonus_score": 12
+  },
+  "monitor_accounts": {
+    "enabled": true,
+    "accounts_per_cycle": 3,
+    "accounts": [
+      { "username": "sama", "niche": "AI", "priority": "high" },
+      { "username": "karpathy", "niche": "AI", "priority": "high" },
+      { "username": "paulg", "niche": "startups", "priority": "high" },
+      { "username": "levelsio", "niche": "indie", "priority": "high" },
+      "... (20+ contas)"
+    ]
+  },
+  "hype_mode": {
+    "enabled": true,
+    "min_likes": 1000,
+    "min_replies": 300,
+    "run_probability": 0.3,
+    "always_in_peak_hours": true,
+    "bonus_score": 35,
+    "blocklist": ["bbb", "futebol", "política", "religião"]
   },
   "filters": {
     "min_likes": 10,

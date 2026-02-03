@@ -17,6 +17,105 @@ try {
   console.warn('Config nao encontrada')
 }
 
+// ============================================
+// NOVAS CONSTANTES PARA DISCOVERY EXPANDIDO
+// ============================================
+
+/**
+ * Keywords para busca direta no X
+ * Queries com min_faves garantem qualidade mínima
+ */
+const SEARCH_KEYWORDS = [
+  // AI/Tech
+  '"AI startup" min_faves:100',
+  '"just shipped" min_faves:50',
+  '"launched today" min_faves:100',
+  '"open source" min_faves:200',
+
+  // Crypto
+  '"bitcoin" min_faves:500',
+  '"eth" OR "ethereum" min_faves:300',
+  '"altseason" min_faves:100',
+
+  // Investimentos
+  '"stock market" min_faves:200',
+  '"fed" "rates" min_faves:100',
+  '"portfolio" min_faves:100',
+
+  // Vibe Coding
+  '"cursor" "coding" min_faves:50',
+  '"vibe coding" min_faves:30'
+]
+
+/**
+ * Contas para monitorar (não seguimos, mas queremos engajar)
+ * 30 contas iniciais, 3 verificadas por ciclo
+ */
+const MONITOR_ACCOUNTS = [
+  // AI/Tech Leaders (8)
+  { username: 'sama', niche: 'AI', priority: 'high' },
+  { username: 'karpathy', niche: 'AI', priority: 'high' },
+  { username: 'ylecun', niche: 'AI', priority: 'high' },
+  { username: 'elonmusk', niche: 'tech', priority: 'medium' },
+  { username: 'satyanadella', niche: 'tech', priority: 'medium' },
+  { username: 'emaborgs', niche: 'AI', priority: 'medium' },
+  { username: 'AndrewYNg', niche: 'AI', priority: 'medium' },
+  { username: 'demaborgs', niche: 'AI', priority: 'medium' },
+
+  // Startups/VCs (6)
+  { username: 'paulg', niche: 'startups', priority: 'high' },
+  { username: 'naval', niche: 'philosophy', priority: 'high' },
+  { username: 'balajis', niche: 'tech', priority: 'high' },
+  { username: 'garrytan', niche: 'VC', priority: 'medium' },
+  { username: 'jason', niche: 'VC', priority: 'medium' },
+  { username: 'rrhoover', niche: 'product', priority: 'medium' },
+
+  // Crypto/Finance (8)
+  { username: 'TaviCosta', niche: 'macro', priority: 'high' },
+  { username: 'Investanswers', niche: 'crypto', priority: 'medium' },
+  { username: 'DocumentingBTC', niche: 'crypto', priority: 'medium' },
+  { username: 'intocryptoverse', niche: 'crypto', priority: 'medium' },
+  { username: 'APompliano', niche: 'crypto', priority: 'medium' },
+  { username: 'TheBlock__', niche: 'crypto', priority: 'low' },
+  { username: 'zaborgs', niche: 'defi', priority: 'low' },
+  { username: 'coaborgs', niche: 'trading', priority: 'low' },
+
+  // Indie Hackers/Vibe Coders (8)
+  { username: 'levelsio', niche: 'indie', priority: 'high' },
+  { username: 'marc_loub', niche: 'indie', priority: 'high' },
+  { username: 'tdinh_me', niche: 'indie', priority: 'medium' },
+  { username: 'dannypostmaa', niche: 'indie', priority: 'medium' },
+  { username: 'yaborgs', niche: 'dev', priority: 'medium' },
+  { username: 'swyx', niche: 'dev', priority: 'medium' },
+  { username: 'aiaborgs', niche: 'AI tools', priority: 'medium' },
+  { username: 'shl', niche: 'indie', priority: 'low' }
+]
+
+/**
+ * Blocklist para Hype Mode - tópicos que NÃO queremos
+ * mesmo com alto engajamento
+ */
+const HYPE_BLOCKLIST = [
+  /\b(bbb|big brother|reality|reality show)\b/i,
+  /\b(bolsonaro|lula|pt |psl|governo|ministro|congresso|stf)\b/i,
+  /\b(flamengo|corinthians|palmeiras|futebol|brasileirao|libertadores)\b/i,
+  /\b(igreja|deus|jesus|fé|pastor|evangel)\b/i,
+  /\b(política|político|eleição|voto|urna)\b/i,
+  /\b(novela|celebridade|fofoca|famoso)\b/i
+]
+
+/**
+ * Shuffle array (Fisher-Yates)
+ */
+function shuffleArray(array) {
+  const arr = [...array]
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  return arr
+}
+
 /**
  * Conecta ao Chrome na porta 9222
  */
@@ -137,6 +236,25 @@ function calculateScore(tweet, config) {
     } else if (tweet.authorEngagementScore >= 1) {
       score += 10 // Algum engajamento
     }
+  }
+
+  // === NOVAS FONTES ===
+
+  // Keyword Search (busca ativa, alta relevância)
+  if (tweet.source === 'keyword_search') {
+    score += 12
+  }
+
+  // Monitored Accounts (contas importantes que não seguimos)
+  if (tweet.source === 'monitored_account') {
+    if (tweet.accountPriority === 'high') score += 25
+    else if (tweet.accountPriority === 'medium') score += 15
+  }
+
+  // Hype Mode (alto engajamento fora do nicho)
+  if (tweet.source === 'hype_mode') {
+    score += 35 // Alto engajamento compensa
+    if (tweet.isOutsideNiche) score -= 10 // Pequena penalidade por estar fora do nicho
   }
 
   return Math.round(score)
@@ -489,6 +607,356 @@ export async function findHackerNewsTweets(maxTweets = 3) {
   }
 }
 
+// ============================================
+// NOVAS FONTES DE DISCOVERY (v2)
+// ============================================
+
+/**
+ * FONTE 1: Busca direta por keywords relevantes
+ * Diferente do fallback do CreatorInspiration, esta roda SEMPRE em paralelo
+ */
+export async function findTweetsFromKeywordSearch(maxTweets = 5) {
+  const browser = await getBrowser()
+  const allTweets = []
+
+  try {
+    const page = await browser.newPage()
+    await page.setViewport({ width: 1280, height: 800 })
+
+    // Seleciona 2 keywords aleatórias para não sobrecarregar
+    const selectedKeywords = shuffleArray(SEARCH_KEYWORDS).slice(0, 2)
+
+    console.log(`KeywordSearch: buscando ${selectedKeywords.length} queries...`)
+
+    for (const keyword of selectedKeywords) {
+      try {
+        const searchUrl = `https://x.com/search?q=${encodeURIComponent(keyword)}&src=typed_query&f=live`
+        await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 30000 })
+        await randomDelay(2000, 3000)
+
+        // Scroll para carregar mais
+        await page.evaluate(() => window.scrollBy(0, 500))
+        await randomDelay(1000, 1500)
+
+        const tweets = await page.evaluate((searchQuery) => {
+          const results = []
+          const articles = document.querySelectorAll('article[data-testid="tweet"]')
+
+          articles.forEach((article, index) => {
+            if (index >= 8) return
+
+            try {
+              const textEl = article.querySelector('[data-testid="tweetText"]')
+              const text = textEl?.textContent?.trim() || ''
+
+              const alreadyLiked = !!article.querySelector('[data-testid="unlike"]')
+              if (alreadyLiked) return
+
+              const authorEl = article.querySelector('[data-testid="User-Name"] a')
+              const authorHref = authorEl?.href || ''
+              const authorMatch = authorHref.match(/x\.com\/(\w+)/)
+              const author = authorMatch ? authorMatch[1] : ''
+
+              const timeEl = article.querySelector('time')
+              const linkEl = timeEl?.closest('a')
+              const url = linkEl?.href || ''
+              const datetime = timeEl?.getAttribute('datetime') || ''
+
+              const getMetric = (testId) => {
+                const el = article.querySelector(`[data-testid="${testId}"]`)
+                const text = el?.textContent || '0'
+                const match = text.match(/[\d,.]+[KMB]?/i)
+                if (!match) return 0
+                let num = match[0].replace(/,/g, '')
+                if (num.includes('K')) num = parseFloat(num) * 1000
+                else if (num.includes('M')) num = parseFloat(num) * 1000000
+                else num = parseInt(num) || 0
+                return num
+              }
+
+              if (text && url && author) {
+                results.push({
+                  author,
+                  text: text.slice(0, 500),
+                  url,
+                  datetime,
+                  likes: getMetric('like'),
+                  replies: getMetric('reply'),
+                  retweets: getMetric('retweet'),
+                  source: 'keyword_search',
+                  searchKeyword: searchQuery
+                })
+              }
+            } catch (e) {}
+          })
+
+          return results
+        }, keyword)
+
+        allTweets.push(...tweets)
+        await randomDelay(1500, 2500)
+
+      } catch (e) {
+        console.log(`KeywordSearch "${keyword.slice(0, 30)}..." erro:`, e.message)
+      }
+    }
+
+    await safeClosePage(browser, page)
+    console.log(`KeywordSearch: ${allTweets.length} tweets totais`)
+
+    return allTweets.slice(0, maxTweets).map(t => ({ ...t, score: calculateScore(t, config) }))
+
+  } catch (error) {
+    console.error('KeywordSearch erro:', error.message)
+    return []
+  }
+}
+
+/**
+ * FONTE 2: Monitora contas relevantes que não seguimos
+ * Permite alcançar 50+ contas sem poluir a timeline
+ */
+export async function findTweetsFromMonitoredAccounts(maxTweets = 5) {
+  const browser = await getBrowser()
+  const allTweets = []
+
+  try {
+    const page = await browser.newPage()
+    await page.setViewport({ width: 1280, height: 800 })
+
+    // Usa config se disponível, senão usa lista default
+    const accountsList = config.monitor_accounts?.accounts?.length > 0
+      ? config.monitor_accounts.accounts
+      : MONITOR_ACCOUNTS
+
+    // Seleciona 3 contas aleatórias para não sobrecarregar
+    const accounts = shuffleArray(accountsList).slice(0, 3)
+
+    console.log(`MonitoredAccounts: verificando @${accounts.map(a => a.username).join(', @')}...`)
+
+    for (const account of accounts) {
+      try {
+        await page.goto(`https://x.com/${account.username}`, {
+          waitUntil: 'networkidle2',
+          timeout: 30000
+        })
+        await randomDelay(1500, 2500)
+
+        // Extrai tweets recentes do perfil
+        const tweets = await page.evaluate((acc) => {
+          const results = []
+          const articles = document.querySelectorAll('article[data-testid="tweet"]')
+
+          articles.forEach((article, index) => {
+            if (index >= 5) return // Só últimos 5 tweets
+
+            try {
+              const textEl = article.querySelector('[data-testid="tweetText"]')
+              const text = textEl?.textContent?.trim() || ''
+
+              // Verifica se é retweet (pula)
+              const socialContext = article.querySelector('[data-testid="socialContext"]')
+              if (socialContext?.textContent?.includes('reposted')) return
+
+              const alreadyLiked = !!article.querySelector('[data-testid="unlike"]')
+              if (alreadyLiked) return
+
+              // Autor (deve ser a conta monitorada, não retweet)
+              const authorEl = article.querySelector('[data-testid="User-Name"] a')
+              const authorHref = authorEl?.href || ''
+              const authorMatch = authorHref.match(/x\.com\/(\w+)/)
+              const author = authorMatch ? authorMatch[1] : ''
+
+              // Pula se não é da conta que estamos monitorando (é retweet)
+              if (author.toLowerCase() !== acc.username.toLowerCase()) return
+
+              const timeEl = article.querySelector('time')
+              const linkEl = timeEl?.closest('a')
+              const url = linkEl?.href || ''
+              const datetime = timeEl?.getAttribute('datetime') || ''
+
+              const getMetric = (testId) => {
+                const el = article.querySelector(`[data-testid="${testId}"]`)
+                const text = el?.textContent || '0'
+                const match = text.match(/[\d,.]+[KMB]?/i)
+                if (!match) return 0
+                let num = match[0].replace(/,/g, '')
+                if (num.includes('K')) num = parseFloat(num) * 1000
+                else if (num.includes('M')) num = parseFloat(num) * 1000000
+                else num = parseInt(num) || 0
+                return num
+              }
+
+              if (text && url && author) {
+                results.push({
+                  author,
+                  text: text.slice(0, 500),
+                  url,
+                  datetime,
+                  likes: getMetric('like'),
+                  replies: getMetric('reply'),
+                  retweets: getMetric('retweet'),
+                  source: 'monitored_account',
+                  accountPriority: acc.priority,
+                  accountNiche: acc.niche
+                })
+              }
+            } catch (e) {}
+          })
+
+          return results
+        }, account)
+
+        allTweets.push(...tweets)
+        await randomDelay(1500, 2500)
+
+      } catch (e) {
+        console.log(`MonitoredAccounts @${account.username} erro:`, e.message)
+      }
+    }
+
+    await safeClosePage(browser, page)
+    console.log(`MonitoredAccounts: ${allTweets.length} tweets totais`)
+
+    return allTweets.slice(0, maxTweets).map(t => ({ ...t, score: calculateScore(t, config) }))
+
+  } catch (error) {
+    console.error('MonitoredAccounts erro:', error.message)
+    return []
+  }
+}
+
+/**
+ * FONTE 3: Hype Mode - tweets com alto engajamento (fora do nicho)
+ * Estratégia 70/30: 30% dos ciclos + sempre em horário de pico
+ */
+export async function findHighEngagementTweets(maxTweets = 3) {
+  const hour = new Date().getHours()
+  const isPeakHour = (hour >= 12 && hour <= 14) || (hour >= 17 && hour <= 20)
+
+  // Usa config se disponível
+  const hypeConfig = config.hype_mode || {}
+  const runProbability = hypeConfig.run_probability || 0.3
+  const alwaysInPeak = hypeConfig.always_in_peak_hours !== false
+
+  // SEMPRE roda em horário de pico, 30% fora do pico
+  const shouldRun = (alwaysInPeak && isPeakHour) || Math.random() < runProbability
+
+  if (!shouldRun) {
+    console.log('HypeMode: pulando (fora do horário de pico e random > 0.3)')
+    return []
+  }
+
+  console.log(`HypeMode: buscando tweets de alto engajamento (isPeak=${isPeakHour})...`)
+
+  const browser = await getBrowser()
+
+  try {
+    const page = await browser.newPage()
+    await page.setViewport({ width: 1280, height: 900 })
+
+    // Vai para Creator Inspiration SEM filtro de nicho
+    await page.goto('https://x.com/i/jf/creators/inspiration/top_posts', {
+      waitUntil: 'networkidle2',
+      timeout: 30000
+    })
+    await randomDelay(2500, 3500)
+
+    // Scroll para carregar mais tweets
+    for (let i = 0; i < 3; i++) {
+      await page.evaluate(() => window.scrollBy(0, 600))
+      await randomDelay(1000, 1500)
+    }
+
+    // Extrai TODOS os tweets (sem filtro de relevância)
+    const allTweets = await page.evaluate(() => {
+      const results = []
+      const articles = document.querySelectorAll('article[data-testid="tweet"]')
+
+      articles.forEach((article, index) => {
+        if (index >= 20) return
+
+        try {
+          const textEl = article.querySelector('[data-testid="tweetText"]')
+          const text = textEl?.textContent?.trim() || ''
+
+          const alreadyLiked = !!article.querySelector('[data-testid="unlike"]')
+          if (alreadyLiked) return
+
+          const authorEl = article.querySelector('[data-testid="User-Name"] a')
+          const authorHref = authorEl?.href || ''
+          const authorMatch = authorHref.match(/x\.com\/(\w+)/)
+          const author = authorMatch ? authorMatch[1] : ''
+
+          const timeEl = article.querySelector('time')
+          const linkEl = timeEl?.closest('a')
+          const url = linkEl?.href || ''
+          const datetime = timeEl?.getAttribute('datetime') || ''
+
+          const getMetric = (testId) => {
+            const el = article.querySelector(`[data-testid="${testId}"]`)
+            const text = el?.textContent || '0'
+            const match = text.match(/[\d,.]+[KMB]?/i)
+            if (!match) return 0
+            let num = match[0].replace(/,/g, '')
+            if (num.includes('K')) num = parseFloat(num) * 1000
+            else if (num.includes('M')) num = parseFloat(num) * 1000000
+            else num = parseInt(num) || 0
+            return num
+          }
+
+          if (text && url && author) {
+            results.push({
+              author,
+              text: text.slice(0, 500),
+              url,
+              datetime,
+              likes: getMetric('like'),
+              replies: getMetric('reply'),
+              retweets: getMetric('retweet')
+            })
+          }
+        } catch (e) {}
+      })
+
+      return results
+    })
+
+    await safeClosePage(browser, page)
+
+    // Filtra por alto engajamento E não estar na blocklist
+    const minLikes = hypeConfig.min_likes || 1000
+    const minReplies = hypeConfig.min_replies || 300
+
+    const highEngagement = allTweets.filter(t => {
+      // Precisa ter alto engajamento
+      if (t.likes < minLikes && t.replies < minReplies) return false
+
+      // Não pode estar na blocklist
+      const text = t.text.toLowerCase()
+      for (const pattern of HYPE_BLOCKLIST) {
+        if (pattern.test(text)) return false
+      }
+
+      return true
+    })
+
+    // Marca como hype_mode e verifica se está fora do nicho
+    highEngagement.forEach(t => {
+      t.source = 'hype_mode'
+      t.isOutsideNiche = !isRelevantTweet(t.text)
+    })
+
+    console.log(`HypeMode: ${highEngagement.length} tweets de alto engajamento encontrados`)
+
+    return highEngagement.slice(0, maxTweets).map(t => ({ ...t, score: calculateScore(t, config) }))
+
+  } catch (error) {
+    console.error('HypeMode erro:', error.message)
+    return []
+  }
+}
+
 /**
  * Descobre tweets de multiplas fontes
  * @param {number} maxTweets - Maximo de tweets a retornar
@@ -497,30 +965,82 @@ export async function findHackerNewsTweets(maxTweets = 3) {
  * @returns {Promise<Array>} - Tweets ordenados por score
  */
 export async function discoverTweets(maxTweets = 10, options = {}) {
-  console.log('\n=== DISCOVERY: Buscando tweets de 4 fontes ===')
+  console.log('\n=== DISCOVERY: Buscando tweets de 7 fontes (sequencial) ===')
 
-  // Verifica se Creator Inspiration está habilitado na config
+  // Verifica configurações
   const discoveryConfig = config.discovery || {}
   const useCreatorInspiration = discoveryConfig.explore_creator_inspiration !== false
+  const useKeywordSearch = discoveryConfig.explore_keyword_search !== false
+  const useMonitoredAccounts = discoveryConfig.explore_monitored_accounts !== false
+  const useHypeMode = discoveryConfig.explore_hype_mode !== false
 
-  // Busca das 4 fontes em paralelo
-  const promises = [
-    findTweetsFromTimeline(5),
-    findTrendingTweets(5),
-    findHackerNewsTweets(3)
-  ]
+  // IMPORTANTE: Rodamos em SÉRIE (uma por vez) para evitar abrir muitas abas
+  // Cada função abre uma aba, usa, e fecha antes da próxima
+  const allTweets = []
 
-  // Adiciona Creator Inspiration se habilitado
-  if (useCreatorInspiration) {
-    promises.push(findCreatorInspirationTweets(8))
+  // 1. Timeline
+  try {
+    const tweets = await findTweetsFromTimeline(5)
+    allTweets.push(...tweets)
+  } catch (e) {
+    console.log('Timeline erro:', e.message)
   }
 
-  const results = await Promise.allSettled(promises)
+  // 2. Trending
+  try {
+    const tweets = await findTrendingTweets(5)
+    allTweets.push(...tweets)
+  } catch (e) {
+    console.log('Trending erro:', e.message)
+  }
 
-  // Coleta resultados
-  const allTweets = results
-    .filter(r => r.status === 'fulfilled')
-    .flatMap(r => r.value || [])
+  // 3. HackerNews
+  try {
+    const tweets = await findHackerNewsTweets(3)
+    allTweets.push(...tweets)
+  } catch (e) {
+    console.log('HackerNews erro:', e.message)
+  }
+
+  // 4. Creator Inspiration
+  if (useCreatorInspiration) {
+    try {
+      const tweets = await findCreatorInspirationTweets(8)
+      allTweets.push(...tweets)
+    } catch (e) {
+      console.log('CreatorInspiration erro:', e.message)
+    }
+  }
+
+  // 5. Keyword Search (NOVO)
+  if (useKeywordSearch) {
+    try {
+      const tweets = await findTweetsFromKeywordSearch(5)
+      allTweets.push(...tweets)
+    } catch (e) {
+      console.log('KeywordSearch erro:', e.message)
+    }
+  }
+
+  // 6. Monitored Accounts (NOVO)
+  if (useMonitoredAccounts) {
+    try {
+      const tweets = await findTweetsFromMonitoredAccounts(5)
+      allTweets.push(...tweets)
+    } catch (e) {
+      console.log('MonitoredAccounts erro:', e.message)
+    }
+  }
+
+  // 7. Hype Mode (NOVO)
+  if (useHypeMode) {
+    try {
+      const tweets = await findHighEngagementTweets(3)
+      allTweets.push(...tweets)
+    } catch (e) {
+      console.log('HypeMode erro:', e.message)
+    }
+  }
 
   // Log por fonte
   const bySource = {}
@@ -1023,6 +1543,9 @@ export default {
   findTrendingTweets,
   findHackerNewsTweets,
   findCreatorInspirationTweets,
+  findTweetsFromKeywordSearch,
+  findTweetsFromMonitoredAccounts,
+  findHighEngagementTweets,
   checkAuthorEngagement,
   reloadConfig
 }
