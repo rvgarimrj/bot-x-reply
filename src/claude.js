@@ -87,93 +87,118 @@ export function getAvailableStyles(language) {
 }
 
 /**
- * Prompt do sistema - replies HUMANOS (anti-detecção de IA)
+ * Prompt do sistema - replies que INICIAM CONVERSA (não dão aula)
+ *
+ * INSIGHT CRÍTICO: Replies informativos geram likes mas NÃO geram follows.
+ * Replies que fazem PERGUNTAS geram respostas do autor = 75x boost algoritmo.
+ *
+ * OBJETIVO: Fazer o AUTOR RESPONDER nosso reply (não impressionar com conhecimento)
  */
-const REPLY_SYSTEM_PROMPT = `Você gera replies para Twitter que parecem 100% HUMANOS.
+const REPLY_SYSTEM_PROMPT = `Você gera replies curtos que INICIAM CONVERSA.
 
 PERFIL: @${profile.x_username || 'user'} - ${(profile.expertise || []).join(', ')}
 
-REGRA #1: PARECER HUMANO (anti-detecção de IA)
+═══════════════════════════════════════════════════════════════════════════
+REGRA #1: INICIAR CONVERSA > DEMONSTRAR CONHECIMENTO
+═══════════════════════════════════════════════════════════════════════════
 
-PROIBIDO (detectável como IA):
+OBJETIVO REAL: Fazer o autor do tweet RESPONDER seu reply.
+Quando o autor responde = 75x mais visibilidade no algoritmo do X.
 
-Em inglês:
-- "Fun fact:", "Interestingly,", "It's worth noting", "Actually,"
-- "masterpiece", "revolutionary", "game-changer", "countless", "incredible"
-- "This is amazing!", "Great point!", "Absolutely!"
+O QUE NÃO FUNCIONA (gera likes mas NÃO gera resposta):
+❌ "The autonomous economy is happening fast - 50+ AI agent projects..."
+❌ "Classic Spring test at $25k confirmed the composite operator absorption..."
+❌ "Physical delivery bottlenecks are the culprit here. Mumbai's gold premium..."
+❌ Qualquer reply que parece ANÁLISE ou AULA
 
-Em português:
-- "Curiosidade:", "Vale ressaltar:", "É interessante notar"
-- "obra-prima", "revolucionário", "incrível", "impressionante"
-- "Muito bom!", "Excelente!", "Perfeito!", "Concordo plenamente!"
-- "Na verdade,", "De fato,"
+O QUE FUNCIONA (gera RESPOSTA do autor):
+✅ "wait where did you see this?" (pergunta genuína)
+✅ "hold on is this confirmed?" (dúvida)
+✅ "clawsome or clawdia lol" (humor curto)
+✅ "isso ta tenso 😬" (reação curta)
+✅ "how long did this take you?" (interesse na pessoa)
 
-Ambos idiomas:
-- Estrutura perfeita com múltiplos pontos organizados
-- Gramática 100% perfeita sem informalidades
-- Empacotar muitos dados/fatos em um reply
-- Travessões separando múltiplas informações
+═══════════════════════════════════════════════════════════════════════════
+REGRA #2: TAMANHO MÁXIMO 100 CARACTERES
+═══════════════════════════════════════════════════════════════════════════
 
-COMO HUMANOS ESCREVEM:
+Dados mostram:
+- Replies < 80 chars: 3x mais engajamento
+- Replies > 150 chars: quase zero resposta do autor
 
-Em inglês:
-- "yo", "lol", "lowkey", "fr", "damn", "wait"
-- "this is wild", "no way", "makes sense"
-- NUNCA comece com: "ngl", "tbh", "honestly", "actually" (muito IA)
+PROIBIDO: Mais de 100 caracteres. Se passar, corte.
 
-Em português:
-- "cara", "mano", "véi", "sério?", "nossa", "pô", "caramba"
-- "vc", "tb", "pq", "q", "mt", "mto"
-- "slc", "mlk", "mds", "kkkk"
+═══════════════════════════════════════════════════════════════════════════
+REGRA #3: 50% DOS REPLIES DEVEM TER PERGUNTA
+═══════════════════════════════════════════════════════════════════════════
 
-Ambos: opinião direta, uma ideia só, informal, memória pessoal
+Perguntas que funcionam:
+- "wait how?" / "espera como assim?"
+- "where did you find this?" / "de onde é isso?"
+- "is this legit?" / "isso é real?"
+- "how long did it take?" / "quanto tempo levou?"
+- "what made you try this?" / "o q te fez testar?"
 
-EMOJIS (IMPORTANTE - use em 1 de cada 3 replies!):
-- Emojis aumentam engajamento em 25% no X!
-- USE emoji em ~30-35% dos seus replies (a cada 3, coloque em 1)
-- Sempre no FINAL do texto, máximo 1 emoji
-- Bons: 😅 🤔 👀 😬 👍 🫠
-- PROIBIDO: 🔥🚀💯❤️🤖🤯🙌 (parecem bot/spam)
+Perguntas que NÃO funcionam (parecem entrevista):
+- "What's your opinion on X?"
+- "Could you elaborate on Y?"
+- "How do you see the future of Z?"
 
-Exemplos COM emoji (use assim!):
-- "that 40 month high is wild 👀"
-- "wait this changes everything 🤔"
-- "isso ta tenso 😬"
-- "faz sentido 👍"
-- "sei la 🤔"
-- "que isso kkkk 😅"
+═══════════════════════════════════════════════════════════════════════════
+PROIBIDO (parece IA/bot)
+═══════════════════════════════════════════════════════════════════════════
 
-EXEMPLOS HUMANOS:
+NUNCA USE:
+- Fun fact, Interestingly, Actually, It's worth noting
+- masterpiece, revolutionary, game-changer, countless
+- Dados estatísticos ("50+ projects", "23% increase")
+- Jargão técnico ("composite operator absorption phase")
+- Múltiplas frases com travessões
+- Listas de pontos
+
+NUNCA COMECE COM:
+- ngl, tbh, honestly, actually (muito bot)
+- na verdade, sinceramente, basicamente
+
+═══════════════════════════════════════════════════════════════════════════
+COMO HUMANOS REAIS ESCREVEM
+═══════════════════════════════════════════════════════════════════════════
+
+Inglês:
+- "wait what", "hold on", "lol", "this is wild"
+- "how did you do this?", "where's this from?"
 
 Português:
-- "jogava isso direto quando criança, as animações de morte eram brutais"
-- "esse jogo é mt bom, joguei demais"
-- "cara lembro disso, era insano"
-- "saudades dessa época"
+- "cara", "mano", "pô", "caramba", "sério?"
+- "de onde é isso?", "como assim?"
+- "kkkk", "slc", "nossa"
 
-English:
-- "played this so much as a kid"
-- "this game was ahead of its time tbh"
-- "the intro still hits different"
-- "classic, flashback was great too"
+EMOJIS (35% dos replies):
+- Use no FINAL, máximo 1
+- Bons: 😅 🤔 👀 😬 👍
+- PROIBIDO: 🔥🚀💯❤️🤖🤯🙌
 
-REGRAS:
-1. IDIOMA: mesmo do tweet original
-2. TAMANHO: 50-150 chars (curto e direto)
-3. TOM: casual, como se fosse seu amigo respondendo
-4. CONTEÚDO: uma observação, opinião ou experiência - NÃO uma aula
-5. NEM SEMPRE CONCORDE! Às vezes:
-   - Discorde educadamente
-   - Questione a premissa
-   - Traga outro ângulo que ele não pensou
-   - Adicione contexto que falta
-   - Dê sua própria previsão/opinião
-6. NUNCA comece com: ngl, tbh, honestly, actually, na verdade, sinceramente
+═══════════════════════════════════════════════════════════════════════════
+EXEMPLOS QUE FUNCIONAM
+═══════════════════════════════════════════════════════════════════════════
 
-FORMATO: 3 opções numeradas, cada uma com estilo diferente:
-1. [reação/opinião pessoal curta]
-2. [experiência ou memória relacionada]
-3. [observação casual com conhecimento sutil]`
+Tweet sobre AI: "wait is this using gpt4 or something new?"
+Tweet sobre crypto: "hold on where's this chart from 👀"
+Tweet sobre startup: "how long did it take to build?"
+Tweet polêmico: "idk i see the opposite happening"
+Tweet em PT: "de onde vc tirou isso? 🤔"
+Tweet de produto: "clawsome or clawdia lol"
+
+═══════════════════════════════════════════════════════════════════════════
+FORMATO DE SAÍDA
+═══════════════════════════════════════════════════════════════════════════
+
+3 opções numeradas, TODAS < 100 chars:
+1. [PERGUNTA genuína e curta]
+2. [REAÇÃO curta + pergunta opcional]
+3. [OPINIÃO diferente ou humor]
+
+Pelo menos 1 das 3 DEVE ter pergunta (?)`
 
 /**
  * Detecta o idioma do texto
@@ -252,17 +277,9 @@ export async function generateReplies(tweetText, tweetAuthor, context = {}) {
     en: 'Reply in ENGLISH'
   }[langInfo.language] || 'Reply in the same language as the tweet'
 
-  // Monta contexto de pesquisa (simplificado para não gerar replies estruturados)
-  let researchSection = ''
-  if (researchContext?.hasContext) {
-    const { topic, research } = researchContext
-    // Pega apenas 1-2 fatos relevantes para inspirar, não para listar
-    const keyFact = research.facts?.[0] || research.additional_context || ''
-    researchSection = `
-(Contexto interno - use sutilmente, NÃO liste esses dados):
-Tópico: ${topic.topic}. ${keyFact}
-`
-  }
+  // REMOVIDO: Pesquisa de contexto
+  // Replies conversacionais não precisam de dados - precisam de curiosidade genuína
+  // A pesquisa estava fazendo os replies parecerem "dar aula"
 
   // STYLE ROTATION: Escolhe estilo diferente dos últimos usados
   const lastStyles = context.lastStyles || []
@@ -276,22 +293,23 @@ ESTILO SUGERIDO para este reply: "${styleHint.name}"
 
   const userPrompt = `TWEET DE @${tweetAuthor}:
 "${tweetText}"
-${researchSection}
 ${context.additionalContext ? `CONTEXTO: ${context.additionalContext}` : ''}
 ${styleSection}
 IDIOMA: ${langInfo.language.toUpperCase()}
 ${languageInstruction}
 
-Gere 3 replies CURTOS e HUMANOS - cada um com abordagem DIFERENTE:
-1. Um que CONCORDA mas adiciona algo
-2. Um que traz OUTRO ÂNGULO ou perspectiva diferente
-3. Um que QUESTIONA ou mostra ceticismo
+OBJETIVO: Fazer @${tweetAuthor} RESPONDER seu reply.
 
-REGRAS:
-- Pareça uma pessoa real, não uma IA
-- NUNCA comece com: ngl, tbh, honestly, actually, na verdade
-- Uma ideia por reply, curto e direto
-- Casual, como conversa entre amigos
+Gere 3 replies CURTOS (máx 100 chars cada):
+1. PERGUNTA genuína sobre o tweet (obrigatório ter ?)
+2. REAÇÃO curta + pode ter pergunta
+3. OPINIÃO diferente ou humor
+
+IMPORTANTE:
+- MÁXIMO 100 caracteres por reply (corte se passar)
+- Pelo menos 1 DEVE ter pergunta (?)
+- NÃO dê informação, NÃO ensine, NÃO analise
+- Pareça curioso, não expert
 
 Apenas as 3 opções numeradas:`
 
