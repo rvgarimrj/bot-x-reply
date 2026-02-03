@@ -24,9 +24,19 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { execSync } from 'child_process'
 
+// Importa funções de validação de horários
+import {
+  analyzeHourPerformance,
+  rankHoursByPerformance,
+  rankDaysByPerformance,
+  compareWithConfig,
+  generateTelegramSection as generateHoursTelegramSection
+} from './validate-hours.js'
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = path.join(__dirname, '..', 'data')
 const LOGS_DIR = path.join(__dirname, '..', 'logs')
+const CONFIG_DIR = path.join(__dirname, '..', 'config')
 
 // Arquivos de dados
 const KNOWLEDGE_PATH = path.join(DATA_DIR, 'knowledge.json')
@@ -36,6 +46,7 @@ const DAILY_REPORTS_PATH = path.join(DATA_DIR, 'daily-reports.json')
 const NIGHTLY_ANALYTICS_PATH = path.join(DATA_DIR, 'nightly-analytics.json')
 const REPORT_HISTORY_PATH = path.join(DATA_DIR, 'report-history.json')
 const GOALS_PATH = path.join(DATA_DIR, 'goals-tracking.json')
+const PEAK_HOURS_PATH = path.join(CONFIG_DIR, 'peak-hours.json')
 
 // ============================================================
 // METAS DE MONETIZAÇÃO (PRIORIDADE #1!)
@@ -1262,9 +1273,42 @@ async function main() {
     console.log(`${COLORS.green}✅ Histórico salvo${COLORS.reset}`)
   }
 
+  // ==========================================
+  // VALIDAÇÃO DE HORÁRIOS (COMPROVAR COM DADOS!)
+  // ==========================================
+  let hoursValidation = null
+  let hoursTelegramSection = ''
+
+  try {
+    console.log('\n⏰ Validando horários com dados REAIS...')
+    const peakConfig = loadJSON(PEAK_HOURS_PATH, {})
+    const { byHour, byDay, totalSamples } = analyzeHourPerformance(knowledge, 14)
+    const rankedHours = rankHoursByPerformance(byHour)
+    const rankedDays = rankDaysByPerformance(byDay)
+    const discrepancies = compareWithConfig(rankedHours, rankedDays, peakConfig)
+
+    hoursValidation = { rankedHours, rankedDays, discrepancies, totalSamples }
+
+    // Mostra top horários no console
+    if (rankedHours.length > 0) {
+      console.log(`   Top horários REAIS: ${rankedHours.slice(0, 5).map(h => h.hour + 'h').join(', ')}`)
+    }
+    if (discrepancies.suggestions.length > 0) {
+      console.log(`   ${COLORS.yellow}⚠️ ${discrepancies.suggestions.length} ajustes sugeridos!${COLORS.reset}`)
+    }
+
+    hoursTelegramSection = generateHoursTelegramSection(rankedHours, rankedDays, discrepancies)
+  } catch (e) {
+    console.log(`   ${COLORS.yellow}⚠️ Erro na validação de horários: ${e.message}${COLORS.reset}`)
+  }
+
   // Envia Telegram
   if (!dryRun) {
-    const telegramReport = formatTelegramReport(analysis, comparison, insights, applied, goalsSection)
+    let telegramReport = formatTelegramReport(analysis, comparison, insights, applied, goalsSection)
+    // Adiciona seção de validação de horários
+    if (hoursTelegramSection) {
+      telegramReport += hoursTelegramSection
+    }
     await sendTelegramReport(telegramReport)
   }
 

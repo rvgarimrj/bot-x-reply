@@ -175,6 +175,60 @@ node scripts/daily-report.js --force
 cat data/report-history.json | head -50
 ```
 
+### ⏰ VALIDAÇÃO DE HORÁRIOS COM DADOS REAIS (NOVO!)
+
+**IMPORTANTE**: Não basta "achar" os melhores horários - temos que COMPROVAR com dados!
+
+O sistema agora valida DIARIAMENTE se os horários configurados são realmente os melhores:
+
+**Como funciona:**
+1. Analisa performance REAL dos últimos 14 dias
+2. Rankeia horários e dias por score de performance
+3. Compara com a configuração atual (peak-hours.json)
+4. Identifica discrepâncias (horários "GOLD" que não performam)
+5. Sugere ajustes automáticos
+6. Envia seção no relatório do Telegram
+
+**Score de Performance:**
+```
+Score = (authorReplyRate * 7.5) + avgLikes
+
+Prioriza author replies (75x boost algorítmico!)
+Mínimo 5 samples por horário para considerar
+```
+
+**Arquivos:**
+- `scripts/validate-hours.js` - Script de validação standalone
+- `config/peak-hours.json` - Configuração de horários
+- `data/hours-validation.json` - Histórico de validações
+
+**Comandos:**
+```bash
+# Validar horários manualmente
+node scripts/validate-hours.js
+
+# Ver ranking de horários REAL
+node scripts/validate-hours.js --report
+
+# Aplicar ajustes sugeridos
+node scripts/validate-hours.js --apply
+
+# Ver última validação
+cat data/hours-validation.json | jq '.validations[-1]'
+```
+
+**Integração com daily-report:**
+O relatório diário agora inclui seção de validação de horários:
+```
+⏰ VALIDAÇÃO DE HORÁRIOS:
+🥇 12h - 1.5 likes, 20% author
+🥈 14h - 1.2 likes, 15% author
+🥉 11h - 0.9 likes, 10% author
+
+⚠️ Ajustes necessários:
+• GOLD: 20,21 → 12,14 (baseado em dados REAIS)
+```
+
 ### 🎯 Metas de Monetização
 | Requisito | Status | Progresso |
 |-----------|--------|-----------|
@@ -189,7 +243,13 @@ cat data/report-history.json | head -50
 - `scripts/nightly-analytics.js` - Coleta X Analytics às 23:59
 - `scripts/daily-optimizer.js` - Otimização automática
 - `scripts/dashboard-analyzer.js` - Análise de dashboard
+- `scripts/daily-report.js` - Relatório completo + metas + Telegram
+- `scripts/validate-hours.js` - Validação de horários com dados REAIS
+- `config/peak-hours.json` - Configuração de horários de ouro
 - `data/nightly-analytics.json` - Histórico de métricas
+- `data/goals-tracking.json` - Tracking de metas de monetização
+- `data/hours-validation.json` - Histórico de validação de horários
+- `data/report-history.json` - Histórico de relatórios diários
 - `data/strategy-adjustments.json` - Estratégia adaptativa
 - `.claude/CLAUDE.md` - Esta documentação
 
