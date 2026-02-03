@@ -28,7 +28,7 @@ import {
   getDailyLimits,
   getRecentStyles
 } from '../src/finder.js'
-import { recordPostedReply } from '../src/knowledge.js'
+import { recordPostedReply, recordSourceOutcome, getBestSources } from '../src/knowledge.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -44,10 +44,27 @@ const CONFIG = {
     start: 8,
     end: 24  // Meia-noite
   },
+  // Intervalos base (serão ajustados por horário de pico)
   intervalMinutes: {
-    base: 15,
+    base: 14,
     min: 10,
     max: 25
+  },
+  // Horários de pico (mais engajamento = intervalos menores)
+  // Baseado em BR + USA timezones
+  peakHours: {
+    // Pico máximo: BR almoço + USA manhã, BR fim de tarde + USA tarde
+    high: [12, 13, 14, 17, 18, 19, 20],
+    // Bom: BR manhã, BR noite
+    medium: [8, 9, 10, 21, 22, 23],
+    // Fraco: madrugada (não opera) e horários de transição
+    low: [11, 15, 16] // Transição
+  },
+  // Intervalos por tipo de horário
+  peakIntervals: {
+    high: { min: 10, base: 12, max: 15 },   // Pico: intervalo curto
+    medium: { min: 12, base: 15, max: 18 }, // Bom: intervalo médio
+    low: { min: 18, base: 22, max: 25 }     // Fraco: intervalo longo
   },
   highQualityThreshold: 80,
   summary: {
@@ -55,9 +72,8 @@ const CONFIG = {
     minute: 30
   },
   // Horarios a evitar (outro robo roda nesses horarios)
-  // Evita 5 minutos antes e depois de cada horario
-  avoidHours: [8, 12, 18, 22, 0], // 8h, 12h, 18h, 22h, meia-noite
-  avoidMinuteBuffer: 5 // minutos antes/depois para evitar
+  avoidHours: [8, 12, 18, 22, 0],
+  avoidMinuteBuffer: 5
 }
 
 // Estado do daemon
@@ -174,32 +190,65 @@ function getNextOperatingTime() {
 }
 
 /**
- * Calcula intervalo ate proximo reply baseado no progresso
+ * Retorna o tipo de horário atual (high/medium/low)
+ * Baseado nos horários de pico configurados
+ */
+function getCurrentPeakType() {
+  const hour = new Date().getHours()
+
+  if (CONFIG.peakHours.high.includes(hour)) return 'high'
+  if (CONFIG.peakHours.medium.includes(hour)) return 'medium'
+  return 'low'
+}
+
+/**
+ * Retorna intervalos otimizados para o horário atual
+ */
+function getOptimalIntervalConfig() {
+  const peakType = getCurrentPeakType()
+  return CONFIG.peakIntervals[peakType] || CONFIG.peakIntervals.medium
+}
+
+/**
+ * Calcula intervalo ate proximo reply baseado no progresso E horario de pico
+ *
+ * Lógica:
+ * 1. Pega intervalos base do horário atual (pico vs normal)
+ * 2. Ajusta baseado no progresso (atrasado = menor, adiantado = maior)
+ * 3. Adiciona variação aleatória
  */
 function calculateNextInterval() {
   const stats = getDailyStats()
   const count = stats.repliesPosted
   const limits = getDailyLimits()
 
-  // Se esta atrasado (abaixo da media esperada), diminui intervalo
+  // Pega config de intervalo para o horário atual
+  const intervalConfig = getOptimalIntervalConfig()
+  const peakType = getCurrentPeakType()
+
+  // Calcula progresso esperado
   const now = new Date()
   const hoursElapsed = now.getHours() - CONFIG.operatingHours.start
   const totalHours = CONFIG.operatingHours.end - CONFIG.operatingHours.start
   const expectedReplies = Math.floor((limits.normal / totalHours) * hoursElapsed)
 
-  let interval = CONFIG.intervalMinutes.base
+  let interval = intervalConfig.base
 
+  // Ajusta baseado no progresso
   if (count < expectedReplies - 5) {
-    // Bem atrasado - intervalo minimo
-    interval = CONFIG.intervalMinutes.min
+    // Bem atrasado - intervalo mínimo do período
+    interval = intervalConfig.min
   } else if (count > expectedReplies + 5) {
-    // Adiantado - intervalo maximo
-    interval = CONFIG.intervalMinutes.max
+    // Adiantado - intervalo máximo do período
+    interval = intervalConfig.max
   }
 
-  // Adiciona variacao aleatoria (+/- 3 min)
-  const variance = Math.floor(Math.random() * 7) - 3
-  interval = Math.max(CONFIG.intervalMinutes.min, Math.min(CONFIG.intervalMinutes.max, interval + variance))
+  // Adiciona variação aleatória (+/- 2 min)
+  const variance = Math.floor(Math.random() * 5) - 2
+  interval = Math.max(intervalConfig.min, Math.min(intervalConfig.max, interval + variance))
+
+  // Log para debug
+  console.log(`Intervalo: ${interval}min (${peakType} peak, ${count}/${expectedReplies} esperados)`)
 
   return interval
 }
@@ -297,6 +346,14 @@ async function runReplyCycle() {
           source: tweet.source || 'unknown'
         })
 
+        // Registra fonte para learning system
+        recordSourceOutcome({
+          source: tweet.source || 'unknown',
+          inspirationCountry: tweet.inspirationCountry,
+          inspirationTab: tweet.inspirationTab,
+          score: tweet.score
+        })
+
         lastReplyTime = Date.now()
         saveState()
 
@@ -383,9 +440,21 @@ async function main() {
   console.log('Configuracao:')
   console.log(`  Meta: ${CONFIG.dailyTarget.min}-${CONFIG.dailyTarget.max} replies/dia`)
   console.log(`  Horario: ${CONFIG.operatingHours.start}h - ${CONFIG.operatingHours.end}h`)
-  console.log(`  Intervalo: ${CONFIG.intervalMinutes.min}-${CONFIG.intervalMinutes.max}min`)
+  console.log(`  Intervalos por pico:`)
+  console.log(`    - High (${CONFIG.peakHours.high.join(',')}h): ${CONFIG.peakIntervals.high.min}-${CONFIG.peakIntervals.high.max}min`)
+  console.log(`    - Medium (${CONFIG.peakHours.medium.join(',')}h): ${CONFIG.peakIntervals.medium.min}-${CONFIG.peakIntervals.medium.max}min`)
+  console.log(`    - Low: ${CONFIG.peakIntervals.low.min}-${CONFIG.peakIntervals.low.max}min`)
   console.log(`  Resumo: ${CONFIG.summary.hour}:${CONFIG.summary.minute}`)
   console.log(`  Evita: ${CONFIG.avoidHours.map(h => h + 'h').join(', ')} (+/-${CONFIG.avoidMinuteBuffer}min)`)
+
+  // Mostra melhores fontes aprendidas
+  const bestSources = getBestSources(3)
+  if (bestSources.length > 0) {
+    console.log('\nMelhores fontes (learning):')
+    bestSources.forEach((s, i) => {
+      console.log(`  ${i + 1}. ${s.source} (${s.posts} posts, ${s.authorReplyRate * 100}% author replies)`)
+    })
+  }
   console.log('')
 
   // Verifica variaveis de ambiente

@@ -406,6 +406,164 @@ export function cleanOldData() {
   return removed
 }
 
+// === LEARNING SYSTEM - Tracking de Performance por Fonte ===
+
+/**
+ * Registra um post de uma fonte específica
+ * Usado para aprender quais combinações de fonte/país/tab funcionam melhor
+ */
+export function recordSourceOutcome(sourceData) {
+  const knowledge = loadKnowledge()
+
+  if (!knowledge.sourceStats) {
+    knowledge.sourceStats = {}
+  }
+
+  // Gera chave única para a combinação fonte/país/tab
+  const key = buildSourceKey(sourceData)
+
+  if (!knowledge.sourceStats[key]) {
+    knowledge.sourceStats[key] = {
+      posts: 0,
+      totalLikes: 0,
+      authorReplies: 0,
+      follows: 0,
+      avgScore: 0,
+      lastUsed: null
+    }
+  }
+
+  knowledge.sourceStats[key].posts++
+  knowledge.sourceStats[key].lastUsed = new Date().toISOString()
+
+  // Registra score inicial se disponível
+  if (sourceData.score) {
+    const stats = knowledge.sourceStats[key]
+    stats.avgScore = ((stats.avgScore * (stats.posts - 1)) + sourceData.score) / stats.posts
+  }
+
+  saveKnowledge(knowledge)
+  return key
+}
+
+/**
+ * Atualiza métricas de performance para uma fonte
+ * Chamado após verificar likes/replies recebidos
+ * @param {string} sourceKey - Key da fonte (ex: "timeline", "creator_inspiration_replies")
+ * @param {object} metrics - { likes, authorReplied, newFollows }
+ */
+export function updateSourceMetrics(sourceKey, metrics) {
+  const knowledge = loadKnowledge()
+
+  if (!knowledge.sourceStats) {
+    knowledge.sourceStats = {}
+  }
+
+  // Se a fonte não existe, cria com valores padrão
+  if (!knowledge.sourceStats[sourceKey]) {
+    knowledge.sourceStats[sourceKey] = {
+      posts: 0,
+      totalLikes: 0,
+      authorReplies: 0,
+      follows: 0,
+      avgScore: 0,
+      lastUsed: null
+    }
+  }
+
+  const stats = knowledge.sourceStats[sourceKey]
+
+  if (metrics.likes !== undefined) {
+    stats.totalLikes = (stats.totalLikes || 0) + metrics.likes
+  }
+
+  if (metrics.authorReplied) {
+    stats.authorReplies = (stats.authorReplies || 0) + 1
+  }
+
+  if (metrics.newFollows) {
+    stats.follows = (stats.follows || 0) + metrics.newFollows
+  }
+
+  saveKnowledge(knowledge)
+}
+
+/**
+ * Retorna as melhores fontes baseado em performance histórica
+ * Prioriza fontes com maior taxa de authorReplies (75x boost!)
+ */
+export function getBestSources(limit = 5) {
+  const knowledge = loadKnowledge()
+  const stats = knowledge.sourceStats || {}
+
+  // Precisa de pelo menos 10 posts para ser relevante
+  const validSources = Object.entries(stats)
+    .filter(([key, data]) => data.posts >= 10)
+    .map(([key, data]) => {
+      // Score composto: authorReplies/post é o mais importante (75x boost!)
+      const authorReplyRate = data.authorReplies / data.posts
+      const avgLikesPerPost = data.totalLikes / data.posts
+      const followRate = data.follows / data.posts
+
+      // Fórmula: authorReplyRate tem peso 10x porque = 75x boost
+      const performanceScore = (authorReplyRate * 100) + (avgLikesPerPost * 0.5) + (followRate * 20)
+
+      return {
+        source: key,
+        posts: data.posts,
+        authorReplyRate: Math.round(authorReplyRate * 100) / 100,
+        avgLikes: Math.round(avgLikesPerPost * 10) / 10,
+        follows: data.follows,
+        performanceScore: Math.round(performanceScore * 100) / 100
+      }
+    })
+    .sort((a, b) => b.performanceScore - a.performanceScore)
+
+  return validSources.slice(0, limit)
+}
+
+/**
+ * Retorna estatísticas de todas as fontes
+ */
+export function getSourceStats() {
+  const knowledge = loadKnowledge()
+  return knowledge.sourceStats || {}
+}
+
+/**
+ * Constrói chave única para uma fonte
+ */
+function buildSourceKey(sourceData) {
+  const parts = [sourceData.source || 'unknown']
+
+  if (sourceData.inspirationCountry) {
+    parts.push(sourceData.inspirationCountry.toLowerCase().replace(/\s+/g, '_'))
+  }
+
+  if (sourceData.inspirationTab) {
+    parts.push(sourceData.inspirationTab)
+  }
+
+  return parts.join('_')
+}
+
+/**
+ * Verifica se devemos priorizar uma fonte específica baseado no learning
+ * Retorna multiplicador de prioridade (1.0 = normal, >1.0 = priorizar)
+ */
+export function getSourcePriorityMultiplier(sourceData) {
+  const bestSources = getBestSources(3)
+  const key = buildSourceKey(sourceData)
+
+  const ranking = bestSources.findIndex(s => s.source === key)
+
+  if (ranking === 0) return 1.5  // Melhor fonte: +50% prioridade
+  if (ranking === 1) return 1.25 // Segunda: +25%
+  if (ranking === 2) return 1.1  // Terceira: +10%
+
+  return 1.0 // Sem dados suficientes ou não está no top 3
+}
+
 export default {
   loadKnowledge,
   saveKnowledge,
@@ -416,5 +574,11 @@ export default {
   addInsight,
   getKnowledgeSummary,
   getRepliedTweetUrls,
-  cleanOldData
+  cleanOldData,
+  // Learning System
+  recordSourceOutcome,
+  updateSourceMetrics,
+  getBestSources,
+  getSourceStats,
+  getSourcePriorityMultiplier
 }

@@ -6,6 +6,37 @@
 *No recent activity*
 </claude-mem-context>
 
+---
+
+## 🚀 CLAUDE: INICIO DE SESSÃO (LER PRIMEIRO!)
+
+**Eu sou um sistema de aprendizado contínuo.** A cada sessão, devo:
+
+### 1. Verificar Estado Atual
+```bash
+# Ver últimos insights e recomendações
+cat data/learnings.json | head -60
+```
+
+### 2. Rodar Análise (se necessário)
+```bash
+# Se learnings.json está desatualizado (>24h)
+node scripts/analyze-and-learn.js
+```
+
+### 3. Continuar Melhorando
+- Implementar recomendações pendentes
+- Ajustar config baseado em dados
+- Documentar mudanças
+
+### Checklist Rápido
+- [ ] Li `data/learnings.json`?
+- [ ] Verifiquei `recommendations` pendentes?
+- [ ] Daemon está rodando? (`pgrep -f auto-daemon`)
+- [ ] Chrome está ok? (`curl -s http://127.0.0.1:9222/json/version`)
+
+---
+
 # Bot-X-Reply
 
 Sistema inteligente de engajamento no X (Twitter) via replies estratégicos.
@@ -82,6 +113,701 @@ defaults write com.google.Chrome NSAppSleepDisabled -bool YES
 - Delays humanizados: 0.8-1.5s antes, 0.5-1s depois
 - Permite trabalhar no computador enquanto bot posta
 
+### Velocidade de Digitação (Humanizada)
+- **Delay por char**: 150-350ms (configurado em `HUMAN_CONFIG.typingSpeed`)
+- Um reply de 100 chars leva 15-35 segundos (como pessoa real)
+- NAO usar delay < 100ms (parece bot)
+
+### Intervalo Entre Replies (Dinamico por Horario)
+Intervalos variam baseado em horario de pico de engajamento:
+
+| Tipo | Horarios | Intervalo |
+|------|----------|-----------|
+| **Pico** | 12-14h, 17-20h | 10-15min |
+| **Bom** | 8-10h, 20-23h | 12-18min |
+| **Fraco** | outros | 18-25min |
+
+Configurado em `scripts/auto-daemon.js` > `CONFIG.peakIntervals`
+
+---
+
+## 🏆 ESTRATÉGIA DE MONETIZAÇÃO (OURO - NÃO PERDER!)
+
+### O Segredo do Algoritmo do X
+
+O algoritmo do X é **open source** e revela os pesos de cada tipo de engajamento:
+
+| Tipo de Engajamento | Peso no Algoritmo | Estratégia |
+|---------------------|-------------------|------------|
+| Like simples | 1x | ❌ Baixo valor |
+| Bookmark | 10x | - |
+| Click no link | 11x | - |
+| Click no perfil + like/reply | 12x | - |
+| Reply direto | 13.5x | ✅ Nosso foco |
+| Retweet | 20x | - |
+| **Reply que recebe reply do autor** | **75x** | 🎯 **MÁXIMO VALOR** |
+
+### A Fórmula de Ouro
+
+```
+1 reply que o autor responde = 75x mais valor que 1 like
+
+Um tweet com 5 replies onde o autor responde cada um
+  gera MUITO mais valor algorítmico
+  que um tweet com 50 likes sem replies
+```
+
+**Conclusão**: Devemos priorizar tweets onde o **AUTOR RESPONDE os comentários**.
+
+### Sistema de 4 Fontes de Tweets
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      DISCOVERY ENGINE v2                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  1. TIMELINE (For You)                                          │
+│     └─ Tweets do feed pessoal                                   │
+│     └─ Score base: +0                                           │
+│                                                                  │
+│  2. TRENDING TOPICS                                             │
+│     └─ Tópicos em alta filtrados por keywords tech/AI/crypto    │
+│     └─ Score base: +10                                          │
+│                                                                  │
+│  3. HACKER NEWS                                                 │
+│     └─ API top stories → busca tweets relacionados              │
+│     └─ Score base: +15 (alta relevância tech)                   │
+│                                                                  │
+│  4. CREATOR INSPIRATION (NOVO!)                                 │
+│     └─ URL: x.com/i/jf/creators/inspiration/top_posts           │
+│     └─ Tweets curados pelo algoritmo do X                       │
+│     └─ Score base: +25 (+15 extra se tab "replies")             │
+│     └─ Fallback: busca "AI startup", "shipped product"          │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Sistema de Score Inteligente
+
+```
+SCORE FINAL = Base + Engajamento + Recência + Fonte + Autor
+
+━━━ BASE ━━━
+likes/100 + retweets/10
+
+━━━ RECÊNCIA ━━━
+< 1h:  +50  │  < 2h:  +40  │  < 4h:  +20  │  < 8h:  +10
+
+━━━ FONTE ━━━
+Timeline:           +0
+Trending:          +10
+HackerNews:        +15
+Creator Inspiration: +25
+  └─ Tab "replies": +15 extra (alta conversação!)
+
+━━━ AUTOR ENGAJADO ━━━
+(Se verificamos que autor responde comentários)
+5+ replies do autor: +40
+3+ replies:         +25
+1+ replies:         +10
+
+━━━ CONTEÚDO ━━━
+Tem pergunta (?):     +20
+Opinião polêmica:     +15
+Conta prioritária:    +30
+```
+
+### Distribuição por Horário de Pico
+
+```
+HORÁRIOS DE PICO (Timezone BR + USA)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔥 PICO MÁXIMO │ 12-14h, 17-20h │ Intervalo: 10-15min
+   BR: almoço + fim de tarde
+   USA: manhã + tarde
+   → MAIS replies nesse horário!
+
+📈 BOM         │ 8-10h, 20-23h  │ Intervalo: 12-18min
+   BR: manhã + noite
+   → Ritmo normal
+
+📉 FRACO       │ outros         │ Intervalo: 18-25min
+   → Economiza para horários melhores
+```
+
+### Filtro de Keywords (Anti-Ruído)
+
+**NOSSO NICHO**: Tech/IA/Investimentos/Economia/Crypto/Vibe Coding
+
+A página Creator Inspiration mostra tweets populares GERAIS (BBB, música, fofoca).
+Filtramos com regex + word boundaries para garantir tweets do NICHO:
+
+```
+TECH/AI:
+  gpt, chatgpt, llm, claude, openai, anthropic
+  machine learning, artificial intelligence, neural network
+
+STARTUPS:
+  startup, founder, entrepreneur, vc, funding
+  shipped, revenue, mrr, bootstrap, indie hacker
+
+CRYPTO:
+  bitcoin, btc, ethereum, web3, defi, nft, blockchain
+  altcoin, memecoin, bull market, bear market, bullish, bearish
+
+INVESTIMENTOS/ECONOMIA (NOVO!):
+  stock, stocks, stock market, s&p 500, nasdaq, dow jones
+  fed, federal reserve, interest rate, inflation
+  gdp, recession, economy, economic
+  investing, investment, portfolio, trading, trader
+  market, markets, market cap, earnings, revenue
+  hedge fund, asset, macro, fiscal, monetary
+  bond, treasury, yield, gold, commodities
+  etf, index fund, dividend, passive income
+
+VIBE CODING/DEV:
+  coding, programming, python, react, github, deploy
+  vibe coding, cursor, copilot, code editor, vscode
+```
+
+### Learning System (Auto-Melhoria)
+
+O sistema aprende automaticamente quais fontes geram mais engajamento:
+
+```javascript
+// Estrutura de dados em data/knowledge.json
+{
+  "sourceStats": {
+    "creator_inspiration_replies": {
+      "posts": 45,
+      "totalLikes": 540,
+      "authorReplies": 8,    // ← MAIS IMPORTANTE!
+      "follows": 3
+    },
+    "timeline": {
+      "posts": 120,
+      "totalLikes": 890,
+      "authorReplies": 12,
+      "follows": 5
+    }
+  }
+}
+
+// Após 100+ posts, sistema auto-prioriza fontes com maior:
+// authorReplies / posts (taxa de reply do autor)
+```
+
+### Fluxo Completo: Reply → Seguidor → Monetização
+
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│  DISCOVERY  │───▶│   REPLY     │───▶│   BOOST     │───▶│ CONVERSÃO   │
+│  4 fontes   │    │ Inteligente │    │ Algorítmico │    │             │
+└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+      │                  │                  │                  │
+      ▼                  ▼                  ▼                  ▼
+ Encontra tweets    Anti-detecção     Autor responde     Visibilidade
+ do nicho tech/     Rotação estilos   = 75x boost        para milhares
+ AI/crypto          Parecer humano                       de pessoas
+                                                              │
+                                                              ▼
+                                                     Novos seguidores
+                                                     QUALIFICADOS
+                                                     (mesmo nicho)
+                                                              │
+                                                              ▼
+                                                      MONETIZAÇÃO
+                                                     (produtos, afiliados,
+                                                      consultoria, etc.)
+```
+
+### Comandos de Verificação (IMPORTANTE!)
+
+```bash
+# 1. Verificar se o novo sistema está ativo
+node -e "import('./src/discovery.js').then(m => {
+  console.log('Funções disponíveis:')
+  console.log('- findCreatorInspirationTweets:', typeof m.findCreatorInspirationTweets)
+  console.log('- checkAuthorEngagement:', typeof m.checkAuthorEngagement)
+  console.log('- discoverTweets:', typeof m.discoverTweets)
+})"
+
+# 2. Testar discovery completo (4 fontes)
+node -e "import('./src/discovery.js').then(m => m.discoverTweets(5).then(t => {
+  console.log('Tweets encontrados:', t.length)
+  const sources = {}
+  t.forEach(x => sources[x.source] = (sources[x.source]||0)+1)
+  console.log('Por fonte:', sources)
+  console.log('Top tweet:', t[0]?.author, 'score:', t[0]?.score)
+}))"
+
+# 3. Testar Creator Inspiration com fallback
+node -e "import('./src/discovery.js').then(m => m.findCreatorInspirationTweets(3).then(t => {
+  console.log('Creator Inspiration:', t.length, 'tweets')
+  t.forEach(x => console.log('-', x.author, '| score:', x.score, '| tab:', x.inspirationTab))
+}))"
+
+# 4. Ver learning system (melhores fontes)
+node -e "import('./src/knowledge.js').then(m => {
+  const best = m.getBestSources(5)
+  console.log('Melhores fontes aprendidas:')
+  best.forEach((s,i) => console.log((i+1)+'.', s.source, '- authorReplyRate:', s.authorReplyRate))
+})"
+
+# 5. Verificar se daemon está usando versão nova
+ps aux | grep auto-daemon | grep -v grep
+# Se estiver rodando, reiniciar para usar código novo:
+# pkill -2 -f "auto-daemon.js" && sleep 2 && node scripts/auto-daemon.js
+```
+
+### Métricas de Sucesso Esperadas
+
+| Métrica | Antes | Depois | Melhoria |
+|---------|-------|--------|----------|
+| Fontes de tweets | 3 | 4 | +33% |
+| Score médio dos tweets | ~60 | ~85 | +42% |
+| Tweets relevantes/ciclo | 3-5 | 8-12 | +140% |
+| Chance de reply do autor | ~5% | ~25% | +400% |
+| Boost algorítmico | 13x | até 75x | +477% |
+| Qualidade dos seguidores | média | alta | ↑↑↑ |
+
+---
+
+## 🧪 VERIFICAÇÃO DE SUCESSO
+
+### Script de Teste Automatizado
+
+```bash
+# Rodar verificação completa (5 testes)
+node scripts/check-success.js
+```
+
+**Testes executados:**
+1. ✅ Discovery com 4 fontes
+2. ✅ Creator Inspiration + Fallback
+3. ✅ Learning System coletando dados
+4. ✅ Estatísticas do dia
+5. ✅ Filtro de keywords do nicho
+
+### Monitoramento Contínuo
+
+```bash
+# Ver logs do daemon em tempo real
+tail -f logs/auto-daemon.log
+
+# Verificar se daemon está rodando
+ps aux | grep auto-daemon | grep -v grep
+
+# Ver estatísticas do Learning System
+node -e "import('./src/knowledge.js').then(m => {
+  const best = m.getBestSources(5)
+  console.log('Melhores fontes:')
+  best.forEach((s,i) => console.log((i+1)+'.', s.source, '| posts:', s.posts, '| authorReplies:', s.authorReplies))
+})"
+```
+
+### Marcos de Sucesso
+
+| Marco | Quando | Ação |
+|-------|--------|------|
+| **10 posts** | Dia 1 | Verificar se todas as fontes estão contribuindo |
+| **50 posts** | Dia 2-3 | Analisar quais fontes geram mais engajamento |
+| **100 posts** | Dia 4-5 | Learning System tem dados suficientes para otimizar |
+| **200 posts** | Semana 2 | Analisar crescimento de seguidores qualificados |
+
+### Sinais de Sucesso
+
+**✅ Funcionando bem se:**
+- Discovery busca de 4 fontes (ver "Por fonte:" nos logs)
+- Creator Inspiration usa fallback quando necessário
+- Scores > 50 para tweets selecionados
+- Learning System registra sourceStats
+- Replies parecem humanos (sem flags de IA)
+
+**⚠️ Atenção se:**
+- Apenas 1-2 fontes retornando tweets
+- Scores consistentemente < 30
+- Muitos erros nos logs
+- 0 tweets encontrados frequentemente
+
+### Próximos Passos (Checklist)
+
+- [ ] Após 100 posts: verificar `getBestSources()`
+- [ ] Identificar fonte com maior `authorReplyRate`
+- [ ] Considerar ativar `check_author_engagement` no config
+- [ ] Analisar quais tipos de reply geram mais follows
+- [ ] Ajustar keywords se necessário para o nicho
+
+---
+
+## 🧠 SISTEMA DE APRENDIZADO CONTÍNUO (CLAUDE)
+
+### Como Eu (Claude) Aprendo Entre Sessões
+
+Para continuar melhorando o bot, use este comando no início de cada sessão:
+
+```bash
+# Mostra relatório completo para eu analisar
+node scripts/analyze-and-learn.js
+```
+
+Isso me mostra:
+- Performance de cada fonte
+- Melhores horários
+- Insights automáticos
+- Recomendações de otimização
+
+### Arquivos que Eu Leio para "Lembrar"
+
+| Arquivo | O que Contém |
+|---------|--------------|
+| `data/learnings.json` | Insights, padrões, recomendações aprendidas |
+| `data/knowledge.json` | Replies postados, métricas, sourceStats |
+| `.claude/CLAUDE.md` | Estratégias e regras do sistema |
+
+### Workflow de Melhoria Contínua
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    CICLO DE APRENDIZADO                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  1. DAEMON POSTA REPLIES                                        │
+│     └─ Registra fonte, score, horário em knowledge.json        │
+│                                                                  │
+│  2. COLLECT-METRICS (a cada 6-12h)                              │
+│     └─ Coleta likes, replies, authorReplied                    │
+│     └─ Atualiza métricas em knowledge.json                     │
+│                                                                  │
+│  3. ANALYZE-AND-LEARN (diário/semanal)                          │
+│     └─ Analisa padrões de performance                          │
+│     └─ Gera insights automáticos                               │
+│     └─ Salva learnings em learnings.json                       │
+│                                                                  │
+│  4. SESSÃO COM CLAUDE (quando necessário)                       │
+│     └─ Roda: node scripts/analyze-and-learn.js                 │
+│     └─ Claude analisa relatório                                 │
+│     └─ Claude propõe/implementa melhorias                      │
+│                                                                  │
+│  5. DEPLOY DAS MELHORIAS                                        │
+│     └─ Reinicia daemon com código novo                         │
+│     └─ Volta para passo 1                                       │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Comandos para Análise com Claude
+
+```bash
+# 1. Gerar relatório completo (PRINCIPAL)
+node scripts/analyze-and-learn.js
+
+# 2. Verificar sistema está funcionando
+node scripts/check-success.js
+
+# 3. Coletar métricas (necessário para aprender)
+node scripts/collect-metrics.js --all
+
+# 4. Ver estado atual em tempo real
+cat data/learnings.json | head -50
+```
+
+### O que Eu (Claude) Posso Melhorar
+
+Baseado nos dados, posso ajustar:
+
+| Área | Arquivo | Tipo de Ajuste |
+|------|---------|----------------|
+| Prioridade de fontes | `config/accounts.json` | Aumentar/reduzir peso |
+| Horários de pico | `scripts/auto-daemon.js` | Ajustar intervalos |
+| Keywords do nicho | `src/discovery.js` | Adicionar/remover termos |
+| Estilos de reply | `src/claude.js` | Ajustar prompts |
+| Filtros de qualidade | `config/accounts.json` | min_likes, max_replies |
+
+### Marcos de Aprendizado
+
+| Replies | O que Acontece |
+|---------|----------------|
+| 50 | Primeiros padrões visíveis |
+| 100 | Learning System tem dados confiáveis |
+| 200 | Insights de horário e estilo aparecem |
+| 500 | Sistema auto-otimizado, ajustes finos |
+
+---
+
+## 📊 MONITORAMENTO E AUTO-OTIMIZAÇÃO
+
+### Scripts de Monitoramento
+
+O sistema inclui 3 scripts para monitoramento e otimização contínua:
+
+| Script | Função | Frequência Recomendada |
+|--------|--------|------------------------|
+| `check-success.js` | Verifica se sistema está funcionando | Após mudanças |
+| `monitor-and-optimize.js` | Analisa performance e sugere otimizações | Diariamente |
+| `collect-metrics.js` | Coleta likes/replies dos posts | A cada 6-12h |
+
+### Comandos de Monitoramento
+
+```bash
+# 1. Verificação rápida (5 testes)
+node scripts/check-success.js
+
+# 2. Análise completa de performance
+node scripts/monitor-and-optimize.js
+
+# 3. Coletar métricas de engajamento
+node scripts/collect-metrics.js          # Últimos 20 replies
+node scripts/collect-metrics.js --all    # Todos sem métricas
+
+# 4. Ver estatísticas em tempo real
+node -e "import('./src/knowledge.js').then(m => {
+  const stats = m.getSourceStats()
+  console.log('=== PERFORMANCE POR FONTE ===')
+  Object.entries(stats).forEach(([src, data]) => {
+    const rate = data.posts > 0 ? (data.authorReplies/data.posts*100).toFixed(1) : 0
+    console.log(src + ': ' + data.posts + ' posts, ' + rate + '% author replies')
+  })
+})"
+```
+
+### Workflow de Otimização
+
+```
+DIÁRIO (23:30 - antes do resumo):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Daemon envia resumo no Telegram
+2. Sistema já registrou sourceStats
+
+SEMANAL (após 100+ posts):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Rodar: node scripts/monitor-and-optimize.js
+2. Analisar quais fontes têm maior authorReplyRate
+3. Considerar ajustes no config/accounts.json
+
+QUANDO NECESSÁRIO:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Se engajamento cair: node scripts/collect-metrics.js --all
+- Se muitos tweets fora do nicho: ajustar keywords
+- Se poucos tweets: reduzir min_likes no config
+```
+
+### O que o Sistema Aprende
+
+```javascript
+// data/knowledge.json - sourceStats
+{
+  "creator_inspiration_replies": {
+    "posts": 45,           // Quantos replies postamos dessa fonte
+    "totalLikes": 540,     // Total de likes recebidos
+    "authorReplies": 8,    // Quantos autores responderam (75x boost!)
+    "follows": 3           // Novos follows (estimado)
+  }
+}
+
+// Cálculo de performance:
+authorReplyRate = authorReplies / posts * 100
+
+// Sistema prioriza fontes com maior authorReplyRate
+// após 100+ posts
+```
+
+### Métricas Chave (KPIs)
+
+| KPI | Meta | Como Medir |
+|-----|------|------------|
+| Author Reply Rate | >20% | `authorReplies / posts` |
+| Avg Likes | >5 | `totalLikes / posts` |
+| Posts/Dia | 50-80 | Resumo diário Telegram |
+| Fontes Ativas | 4 | `check-success.js` |
+
+### Alertas Automáticos
+
+O `monitor-and-optimize.js` gera alertas quando:
+
+```
+⚠️ ALERTA: Fonte X tem performance muito abaixo da média
+   Considerar desativar ou revisar keywords
+
+⚠️ ALERTA: authorReplyRate geral abaixo de 10%
+   Revisar qualidade dos replies ou seleção de tweets
+
+⚠️ ALERTA: 0 tweets encontrados em 3 ciclos consecutivos
+   Verificar conexão com Chrome ou filtros muito restritivos
+```
+
+### Ciclo de Melhoria Contínua
+
+```
+┌──────────────────┐
+│   POSTAR REPLY   │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│ REGISTRAR FONTE  │ ← recordSourceOutcome()
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│ COLETAR MÉTRICAS │ ← collect-metrics.js (6-12h depois)
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│ ATUALIZAR STATS  │ ← updateSourceMetrics()
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│ ANALISAR PADRÕES │ ← monitor-and-optimize.js
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│ AJUSTAR PRIORID. │ ← getSourcePriorityMultiplier()
+└────────┬─────────┘
+         │
+         ▼
+     (loop...)
+```
+
+### 📥 FLUXO DE ALIMENTAÇÃO DE DADOS
+
+```
+═══════════════════════════════════════════════════════════════════════
+                    QUANDO E QUE DADOS SÃO COLETADOS
+═══════════════════════════════════════════════════════════════════════
+
+MOMENTO 1: IMEDIATAMENTE APÓS POSTAR (auto-daemon.js)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Função: recordSourceOutcome() + addReply()
+Dados salvos em knowledge.json:
+
+  replies[]: {
+    id, timestamp, tweetUrl, tweetAuthor, tweetText,
+    replyText, replyIndex, wasRecommended,
+    source,           ← "timeline", "trending", "hackernews", "creator_inspiration"
+    inspirationTab,   ← "replies", "likes", "search_fallback"
+    score,            ← score calculado do tweet
+    style,            ← estilo usado ("direct", "memory", etc)
+    language,         ← "en" ou "pt"
+    metrics: { likes: null, replies: null, authorReplied: null }
+  }
+
+  sourceStats[source]: {
+    posts++,          ← contador
+    avgScore,         ← média dos scores
+    lastUsed          ← timestamp
+  }
+
+
+MOMENTO 2: 6-12 HORAS DEPOIS (collect-metrics.js)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Função: fetchReplyMetrics() + updateReplyMetrics()
+Processo:
+  1. Navega para tweetUrl de cada reply
+  2. Encontra nosso reply na thread
+  3. Extrai métricas do reply
+  4. Verifica se autor original respondeu
+
+Dados atualizados em knowledge.json:
+
+  replies[].metrics: {
+    likes,            ← quantos likes nosso reply recebeu
+    replies,          ← quantos replies nosso reply recebeu
+    authorReplied,    ← BOOLEAN: autor original respondeu? (75x boost!)
+    checkedAt         ← timestamp da coleta
+  }
+
+  sourceStats[source]: {
+    totalLikes += likes,
+    authorReplies++   ← se authorReplied = true
+  }
+
+
+MOMENTO 3: DIARIAMENTE/SEMANALMENTE (analyze-and-learn.js)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Função: analyzeSourcePerformance(), generateInsights()
+Processo:
+  1. Lê knowledge.json (replies + sourceStats)
+  2. Calcula métricas agregadas por fonte, horário, estilo
+  3. Identifica padrões de sucesso
+  4. Gera insights e recomendações
+
+Dados salvos em learnings.json:
+
+  patterns: {
+    bestSources,      ← ["creator_inspiration_replies", "hackernews"]
+    bestHours,        ← [12, 13, 17, 18, 19]
+    bestStyles        ← ["observation", "question"]
+  }
+
+  insights[]: {
+    type,             ← "success", "warning", "info"
+    category,         ← "source", "timing", "engagement"
+    message,          ← texto do insight
+    action,           ← ação recomendada
+    date
+  }
+
+  recommendations[]: {
+    priority,         ← "high", "medium", "low"
+    title, description, action
+  }
+
+
+MOMENTO 4: NOVA SESSÃO CLAUDE (session-context.js + hook)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Função: Hook SessionStart
+Processo:
+  1. Lê learnings.json e knowledge.json
+  2. Gera resumo de contexto
+  3. Claude recebe e pode agir
+
+Claude pode então:
+  - Implementar recomendações
+  - Ajustar config/accounts.json
+  - Modificar src/discovery.js (keywords, scores)
+  - Atualizar intervalos em auto-daemon.js
+
+═══════════════════════════════════════════════════════════════════════
+```
+
+### 🔄 Automação da Coleta
+
+Para automatizar collect-metrics, adicionar ao crontab:
+
+```bash
+# Editar crontab
+crontab -e
+
+# Adicionar (roda 2x ao dia: 14h e 22h)
+0 14 * * * cd /Users/user/AppsCalude/Bot-X-Reply && node scripts/collect-metrics.js >> logs/collect-metrics.log 2>&1
+0 22 * * * cd /Users/user/AppsCalude/Bot-X-Reply && node scripts/collect-metrics.js >> logs/collect-metrics.log 2>&1
+
+# Análise diária às 23:00
+0 23 * * * cd /Users/user/AppsCalude/Bot-X-Reply && node scripts/analyze-and-learn.js >> logs/analyze.log 2>&1
+```
+
+### 📊 Estrutura dos Arquivos de Dados
+
+```
+data/
+├── knowledge.json     # 500KB-2MB (cresce com replies)
+│   ├── replies[]      # Array de todos os replies postados
+│   ├── sourceStats{}  # Estatísticas por fonte
+│   ├── patterns{}     # Padrões identificados
+│   └── lastUpdated    # Timestamp
+│
+└── learnings.json     # ~10KB (insights consolidados)
+    ├── insights[]     # Últimos 50 insights
+    ├── patterns{}     # Melhores fontes/horários/estilos
+    ├── recommendations[] # Ações pendentes
+    └── changelog[]    # Histórico de análises
+```
+
 ---
 
 ## Arquitetura
@@ -96,14 +822,18 @@ defaults write com.google.Chrome NSAppSleepDisabled -bool YES
 **Este e o modo recomendado para 50+ replies/dia**
 
 1. Daemon roda 8h-23h59 automaticamente
-2. Busca tweets de 3 fontes: timeline, trending, Hacker News
+2. Busca tweets de **4 fontes**: timeline, trending, Hacker News, **Creator Inspiration**
 3. Filtra: ja respondidos, limite por conta, qualidade
 4. Gera reply com rotacao de estilo (anti-deteccao)
 5. Posta via Puppeteer automaticamente
 6. Notifica cada reply no Telegram (silencioso)
 7. Envia resumo diario as 23:30
 
-**Intervalo dinamico**: ajusta 10-25min baseado no progresso
+**Intervalo dinamico por horario de pico**:
+- Pico (12-14h, 17-20h): 10-15min
+- Bom (8-10h, 20-23h): 12-18min
+- Fraco: 18-25min
+
 **Decisao inteligente**: se atingiu meta normal (70), so posta tweets score >= 80
 
 ### Modo Manual (On-Demand) - reply-bot.js
@@ -233,6 +963,24 @@ pkill -2 -f "auto-daemon.js"
 
 # Forcado
 pkill -9 -f "auto-daemon.js"
+
+# IMPORTANTE: Sempre verificar se realmente parou
+ps aux | grep "auto-daemon" | grep -v grep
+```
+
+### CUIDADO: Multiplos Daemons
+Se houver mais de 1 daemon rodando, os replies vao sair muito rapido (um de cada daemon). Sempre verificar:
+```bash
+ps aux | grep "auto-daemon" | grep -v grep | wc -l
+# Deve mostrar 1 (ou 0 se parado)
+```
+
+### LaunchAgent vs Manual
+O LaunchAgent `com.botxreply.daemon.plist` pode reiniciar o daemon automaticamente, criando duplicatas.
+**Se for iniciar manualmente, SEMPRE desabilitar o LaunchAgent primeiro:**
+```bash
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.botxreply.daemon.plist 2>/dev/null
+launchctl unload ~/Library/LaunchAgents/com.botxreply.daemon.plist 2>/dev/null
 ```
 
 ### LaunchAgents (auto-start)
@@ -246,7 +994,95 @@ Os serviços iniciam automaticamente via launchd:
 
 ## Historico de Melhorias (Guia de Referencia)
 
-### 2026-02-02: Sistema Autonomo 50+ Replies/Dia
+### 2026-02-02 (v2): Creator Inspiration + Learning System
+
+**Objetivo**: Maximizar boost algoritmico priorizando tweets onde autor responde comentarios
+
+**Insight do Algoritmo do X**:
+| Tipo de Engajamento | Peso no Algoritmo |
+|---------------------|-------------------|
+| Like simples | 1x |
+| Reply direto | 13.5x |
+| **Reply que recebe reply do autor** | **75x** |
+
+**Nova Fonte: Creator Inspiration**
+URL: `https://x.com/i/jf/creators/inspiration/top_posts`
+
+Tweets curados pelo X, COM FALLBACK inteligente:
+1. Primeiro tenta página Creator Inspiration
+2. Filtra por keywords relevantes (tech/AI/startups/crypto)
+3. Se não encontrar tweets do nicho, faz busca com queries relevantes:
+   - "AI startup launched min_faves:50"
+   - "shipped product min_faves:100"
+   - "crypto bitcoin min_faves:100"
+
+**Por que "Most replies" e ouro**:
+- Alta conversacao = autor provavelmente responde comentarios
+- Se autor responder nosso reply = 75x boost algoritmico!
+
+**Novo Sistema de Score**:
+```
+Base: likes/100 + retweets/10 + bonus recencia
+
+Por fonte:
+- Timeline: +0
+- Trending: +10
+- HackerNews: +15
+- Creator Inspiration: +25
+  - Tab "replies": +15 adicional
+
+Por autor engajado (se verificado):
+- 5+ replies do autor: +40
+- 3+ replies: +25
+- 1+ replies: +10
+```
+
+**Learning System** (`src/knowledge.js`):
+- Registra performance por fonte/pais/tab
+- Aprende quais combinacoes geram mais authorReplies
+- Auto-ajusta prioridades apos 100+ posts
+
+**Distribuicao por Horario de Pico**:
+```
+Pico (BR almoco + USA, BR tarde + USA):
+  12-14h, 17-20h → intervalo 10-15min
+
+Bom (BR manha, BR noite):
+  8-10h, 20-23h → intervalo 12-18min
+
+Fraco (transicao):
+  outros → intervalo 18-25min
+```
+
+**Arquivos Modificados**:
+- `src/discovery.js`: `findCreatorInspirationTweets()`, `checkAuthorEngagement()`, `calculateScore()` atualizado
+- `src/knowledge.js`: `recordSourceOutcome()`, `getBestSources()`, learning system
+- `scripts/auto-daemon.js`: `getOptimalIntervalConfig()`, integracao learning
+- `config/accounts.json`: novas configs
+
+**Filtro de Keywords (Anti-Ruído)**:
+O Creator Inspiration mostra tweets populares GERAIS (BBB, música, etc).
+Filtramos por regex com word boundaries para garantir tweets do nicho:
+- Tech/AI: `gpt`, `chatgpt`, `llm`, `claude`, `openai`, `machine learning`
+- Startups: `startup`, `founder`, `vc`, `funding`, `shipped`
+- Crypto: `bitcoin`, `ethereum`, `web3`, `defi`, `nft`
+- Dev: `coding`, `programming`, `python`, `react`, `github`
+
+**Comandos de Teste**:
+```bash
+# Testar Creator Inspiration isolado
+node -e "import('./src/discovery.js').then(m => m.findCreatorInspirationTweets(5).then(console.log))"
+
+# Testar discovery completo (4 fontes)
+node -e "import('./src/discovery.js').then(m => m.discoverTweets(10).then(t => console.log(t.map(x => x.source + ':' + x.score))))"
+
+# Ver melhores fontes aprendidas
+node -e "import('./src/knowledge.js').then(m => console.log(m.getBestSources()))"
+```
+
+---
+
+### 2026-02-02 (v1): Sistema Autonomo 50+ Replies/Dia
 
 **Objetivo**: Transformar bot de aprovacao manual (10/dia) para autonomo (50-80/dia)
 
@@ -260,11 +1096,12 @@ Os serviços iniciam automaticamente via launchd:
 3. `src/telegram.js` - Resumo diario
 4. `config/accounts.json` - Novas configs
 
-**Sistema de Discovery (3 fontes)**:
+**Sistema de Discovery (4 fontes)**:
 ```
 1. Timeline (For You) - tweets do feed
 2. Trending Topics - filtra por keywords relevantes (AI, crypto, tech)
 3. Hacker News - busca tweets sobre posts do HN
+4. Creator Inspiration - tweets curados pelo X (NOVO!)
 ```
 
 **Rotacao de Estilos (anti-deteccao)**:
@@ -282,12 +1119,19 @@ Os serviços iniciam automaticamente via launchd:
 - Acima de 80: PARA (limite anti-bot)
 ```
 
-**Intervalo Dinamico**:
+**Intervalo Dinamico por Horario**:
 ```
-- Atrasado (< esperado - 5): 10min
-- Normal: 15min
-- Adiantado (> esperado + 5): 25min
-- Variacao aleatoria: +/- 3min
+Horarios de Pico (12-14h, 17-20h):
+  - Base: 12min, Min: 10min, Max: 15min
+
+Horarios Bons (8-10h, 20-23h):
+  - Base: 15min, Min: 12min, Max: 18min
+
+Horarios Fracos:
+  - Base: 22min, Min: 18min, Max: 25min
+
++ Ajuste por progresso (atrasado/adiantado)
++ Variacao aleatoria: +/- 2min
 ```
 
 **Protecoes**:
@@ -377,18 +1221,35 @@ Os serviços iniciam automaticamente via launchd:
     "explore_timeline": true,
     "explore_trending": true,
     "explore_hacker_news": true,
-    "trending_keywords": ["AI", "crypto", "tech", "startup", "coding", "GPT", "LLM"]
+    "explore_creator_inspiration": true,
+    "trending_keywords": ["AI", "crypto", "tech", "startup", "coding", "GPT", "LLM"],
+    "creator_inspiration": {
+      "enabled": true,
+      "priority_tabs": ["replies", "likes"],
+      "countries": ["United States", "Brazil"],
+      "check_author_engagement": false
+    }
   },
   "filters": {
-    "min_likes": 50,
-    "max_replies": 100,
-    "max_age_hours": 6
+    "min_likes": 10,
+    "max_replies": 200,
+    "max_age_hours": 12
   },
   "daily_limits": {
     "min_total": 50,
     "normal_total": 70,
     "max_total": 80,
     "max_per_account": 3
+  },
+  "peak_hours": {
+    "high": [12, 13, 14, 17, 18, 19, 20],
+    "medium": [8, 9, 10, 21, 22, 23],
+    "low": [11, 15, 16]
+  },
+  "peak_intervals": {
+    "high": { "min": 10, "base": 12, "max": 15 },
+    "medium": { "min": 12, "base": 15, "max": 18 },
+    "low": { "min": 18, "base": 22, "max": 25 }
   }
 }
 ```
@@ -434,3 +1295,39 @@ Os serviços iniciam automaticamente via launchd:
 | experiencia | pessoal | "tomei prejuizo ignorando isso" |
 
 **Regra**: Nao repete os ultimos 5 estilos usados
+
+---
+
+## Emojis Contextuais (Anti-Deteccao)
+
+### Implementacao (2026-02-02)
+Emojis adicionados de forma natural e aleatorio (~30%) para parecer mais humano.
+
+**Arquivo**: `src/claude.js` linha ~131 (dentro de `REPLY_SYSTEM_PROMPT`)
+
+### Regras no Prompt
+- Usar em ~30% dos replies (Claude decide)
+- Maximo 1 emoji por reply
+- Sempre no FINAL do texto
+- Na duvida, NAO usar
+
+### Emojis Permitidos
+| Emoji | Contexto |
+|-------|----------|
+| 😅 | Situacao engraçada/constrangedora |
+| 🤔 | Duvida, pensando, cetico |
+| 👀 | Interessante, observando |
+| 😬 | Tenso, preocupante |
+| 👍 | Concordancia |
+| 🫠 | Overwhelmed, derretendo |
+
+### Emojis PROIBIDOS
+🔥🚀💯❤️🤖🤯🙌 - Combinacoes classicas de bots/spam
+
+### Exemplos
+```
+"isso ta tenso 😬"
+"faz sentido 👍"
+"sei la 🤔"
+"que isso kkkk 😅"
+```

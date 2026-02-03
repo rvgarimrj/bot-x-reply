@@ -6,7 +6,8 @@ import { execSync } from 'child_process'
  */
 const HUMAN_CONFIG = {
   // Velocidade de digitação (ms entre cada caractere)
-  typingSpeed: { min: 50, max: 120 },
+  // Pessoa normal digita ~40-60 WPM = 200-350ms por char
+  typingSpeed: { min: 150, max: 350 },
 
   // Delays
   delays: {
@@ -15,7 +16,8 @@ const HUMAN_CONFIG = {
     beforeType: { min: 800, max: 1500 },
     afterType: { min: 1000, max: 2000 },
     afterClick: { min: 1500, max: 3000 },
-    readTweet: { min: 2000, max: 4000 },
+    readTweet: { min: 5000, max: 10000 },  // 5-10s para ler (era 2-4s)
+    thinkBeforeReply: { min: 3000, max: 7000 },  // 3-7s pensando antes de responder
     afterPost: { min: 2000, max: 4000 }
   },
 
@@ -199,9 +201,10 @@ async function humanType(page, selector, text) {
 
   await humanDelay({ min: 200, max: 400 })
 
-  // Usa keyboard.type com delay baixo (rápido mas funciona)
-  // delay: 20-40ms por char = texto de 100 chars leva 2-4 segundos
-  const charDelay = 20 + Math.floor(Math.random() * 20) // 20-40ms
+  // Usa keyboard.type com delay humanizado
+  // delay: 50-120ms por char = texto de 100 chars leva 5-12 segundos (mais humano)
+  const { min, max } = HUMAN_CONFIG.typingSpeed
+  const charDelay = min + Math.floor(Math.random() * (max - min)) // 50-120ms
   console.log(`Digitando ${text.length} chars (delay: ${charDelay}ms/char)...`)
 
   await page.keyboard.type(text, { delay: charDelay })
@@ -218,11 +221,27 @@ async function humanType(page, selector, text) {
     // Fallback: tenta clicar e digitar novamente
     await page.click(selector)
     await humanDelay({ min: 300, max: 500 })
-    await page.keyboard.type(text, { delay: 30 })
+    await page.keyboard.type(text, { delay: charDelay })
   }
 
   // Delay depois (simula humano verificando o texto)
   await humanDelay({ min: 400, max: 700 })
+}
+
+/**
+ * Calcula tempo de leitura baseado no tamanho do texto
+ * Pessoas leem ~200-250 palavras/min = ~100-150ms por caractere
+ */
+function calculateReadingTime(textLength) {
+  // Base: 100-150ms por caractere
+  const msPerChar = 100 + Math.floor(Math.random() * 50)
+  const baseTime = textLength * msPerChar
+
+  // Mínimo 5 segundos, máximo 20 segundos
+  const minTime = 5000
+  const maxTime = 20000
+
+  return Math.max(minTime, Math.min(maxTime, baseTime))
 }
 
 /**
@@ -396,7 +415,21 @@ export async function postReply(url, replyText) {
 
     // Scroll para ver o tweet
     await humanScroll(page)
-    await humanDelay(HUMAN_CONFIG.delays.readTweet)
+
+    // Extrai texto do tweet para calcular tempo de leitura
+    const tweetText = await page.evaluate(() => {
+      const tweetElement = document.querySelector('[data-testid="tweetText"]')
+      return tweetElement ? tweetElement.innerText : ''
+    })
+
+    // Calcula tempo de leitura baseado no tamanho do tweet
+    const readingTime = calculateReadingTime(tweetText.length)
+    console.log(`📖 Lendo tweet (${tweetText.length} chars, ${Math.round(readingTime/1000)}s)...`)
+    await humanDelay({ min: readingTime, max: readingTime + 2000 })
+
+    // Pausa para "pensar" antes de responder
+    console.log('🤔 Pensando na resposta...')
+    await humanDelay(HUMAN_CONFIG.delays.thinkBeforeReply)
 
     // Verifica se já tem like antes de dar like
     try {
