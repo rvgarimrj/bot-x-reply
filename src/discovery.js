@@ -1264,6 +1264,19 @@ export async function discoverTweets(maxTweets = 10, options = {}) {
   // Ordena por score
   candidates.sort((a, b) => b.score - a.score)
 
+  // FILTRO DE DIVERSIDADE: Max 1 tweet por autor no resultado final
+  // Evita que o mesmo autor domine o ranking
+  const seenAuthors = new Set()
+  candidates = candidates.filter(t => {
+    const authorLower = t.author?.toLowerCase()
+    if (seenAuthors.has(authorLower)) {
+      return false
+    }
+    seenAuthors.add(authorLower)
+    return true
+  })
+  console.log(`Apos filtro diversidade (1/autor): ${candidates.length} tweets`)
+
   // Opcionalmente verifica engajamento do autor para top candidatos
   // (aumenta score de tweets onde autor costuma responder)
   if (options.checkEngagement && candidates.length > 0) {

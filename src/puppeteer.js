@@ -449,12 +449,40 @@ export async function postReply(url, replyText) {
       console.log('Like: não consegui verificar, pulando')
     }
 
+    // Verifica se tweet tem replies restritos ANTES de tentar
+    const replyButton = await page.$('[data-testid="reply"]')
+    if (!replyButton) {
+      throw new Error('Tweet com replies restritos (botão não encontrado)')
+    }
+
+    // Verifica se o botão está desabilitado ou tem indicação de restrição
+    const isReplyRestricted = await page.evaluate(() => {
+      const btn = document.querySelector('[data-testid="reply"]')
+      if (!btn) return true
+      // Verifica se está desabilitado
+      if (btn.disabled || btn.getAttribute('aria-disabled') === 'true') return true
+      // Verifica se tem texto de restrição na página
+      const restrictedTexts = ['who can reply', 'quem pode responder', 'can\'t reply', 'não pode responder']
+      const pageText = document.body.innerText.toLowerCase()
+      return restrictedTexts.some(t => pageText.includes(t))
+    })
+
+    if (isReplyRestricted) {
+      throw new Error('Tweet com replies restritos (verificado via DOM)')
+    }
+
     // Clica no botão de reply
     console.log('Clicando em reply...')
     await humanClick(page, '[data-testid="reply"]')
 
     // Aguarda modal de reply abrir
     await humanDelay(HUMAN_CONFIG.delays.afterClick)
+
+    // Verifica se modal abriu corretamente
+    const modalOpened = await page.waitForSelector('[data-testid="tweetTextarea_0"], [contenteditable="true"][role="textbox"]', { timeout: 8000 }).catch(() => null)
+    if (!modalOpened) {
+      throw new Error('Modal de reply não abriu (possível restrição)')
+    }
 
     // Encontra o campo de texto do reply
     const replySelectors = [
