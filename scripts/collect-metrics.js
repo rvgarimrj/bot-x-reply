@@ -116,8 +116,15 @@ async function fetchReplyMetrics(browser, replyData) {
           }
 
           // Verifica se o autor respondeu ao nosso reply
-          // (procura reply do autor logo abaixo do nosso)
+          // Precisa verificar se o reply do autor menciona nosso username
           const ourIndex = Array.from(articles).indexOf(article)
+
+          // Pega nosso username do reply
+          const ourUserEl = article.querySelector('[data-testid="User-Name"] a')
+          const ourHref = ourUserEl?.href || ''
+          const ourMatch = ourHref.match(/x\.com\/(\w+)/)
+          const ourUsername = ourMatch ? ourMatch[1].toLowerCase() : ''
+
           for (let i = ourIndex + 1; i < Math.min(ourIndex + 5, articles.length); i++) {
             const nextArticle = articles[i]
             const nextAuthorEl = nextArticle.querySelector('[data-testid="User-Name"] a')
@@ -126,10 +133,16 @@ async function fetchReplyMetrics(browser, replyData) {
             const nextAuthor = nextMatch ? nextMatch[1].toLowerCase() : ''
 
             if (nextAuthor === originalAuthor) {
-              // Verifica se está respondendo a nós (thread context)
-              const replyContext = nextArticle.querySelector('[data-testid="tweet"] a[href*="/status/"]')
-              authorReplied = true
-              break
+              // Verifica se está respondendo a nós checando o "Replying to @username"
+              const replyingTo = nextArticle.querySelector('[data-testid="tweet"] a[href*="/' + ourUsername + '"]')
+              // Ou verifica se menciona nosso @ no texto
+              const tweetText = nextArticle.querySelector('[data-testid="tweetText"]')?.textContent || ''
+              const mentionsUs = tweetText.toLowerCase().includes('@' + ourUsername)
+
+              if (replyingTo || mentionsUs) {
+                authorReplied = true
+                break
+              }
             }
           }
 
