@@ -63,6 +63,57 @@ SEM author replies = SEM boost = SEM crescimento
 - 20% reaction (reação curta)
 - 15% agreeing
 
+**Estilos observados após fix**: observation, experience, memory, cetico, add_context, disagree, personal_take (7 diferentes!)
+
+## 🔧 BUGS CORRIGIDOS 04/02
+
+### Bug 1: Resumo Diário Mostrava 1 Reply (Era 52)
+
+**Problema**: O resumo das 23:30 mostrou apenas 1 reply quando na verdade foram 52.
+
+**Causa**: `getDailyStats()` em `src/finder.js` usava contador em memória (`state.dailyStats.repliesPosted`) que resetava quando o daemon reiniciava.
+
+**Correção**: `getDailyStats()` agora lê diretamente do `knowledge.json`:
+```javascript
+// Antes: retornava state.dailyStats.repliesPosted (memória)
+// Depois: lê replies do dia do knowledge.json (fonte de verdade)
+const todayReplies = getRepliesFromKnowledge(dateStr)
+return { repliesPosted: todayReplies.length, ... }
+```
+
+**Commit**: `690776e` - fix: getDailyStats reads from knowledge.json instead of memory
+
+### Bug 2: Idioma Sempre "other" no Resumo
+
+**Problema**: Breakdown de idiomas mostrava 100% "other" em vez de EN/PT.
+
+**Causa**: `recordPostedReply()` em `auto-daemon.js` não passava `language`, `style`, `score`.
+
+**Correção**: Adicionados campos faltantes:
+```javascript
+recordPostedReply({
+  // ... campos existentes ...
+  language: result.language,  // NOVO
+  style: style,               // NOVO
+  score: tweet.score          // NOVO
+})
+```
+
+**Commit**: `81adab6` - fix: Save language, style, and score in recordPostedReply
+
+### Verificação dos Fixes
+
+```bash
+# Testar getDailyStats
+node -e "import('./src/finder.js').then(m => console.log(m.getDailyStats()))"
+
+# Ver último reply salvo (deve ter language/style/score)
+cat data/knowledge.json | jq '.replies[-1] | {language, style, score}'
+
+# Ver breakdown de idiomas de hoje
+cat data/knowledge.json | jq '[.replies[] | select(.timestamp | startswith("2026-02-04"))] | group_by(.language) | .[] | "\(.[0].language): \(length)"'
+```
+
 ## Métricas Chave (prioridade)
 1. **Author Reply Rate** - Meta: >15% (hoje: 0%)
 2. **Follower Gain/dia** - Meta: +10/dia (hoje: 0)
