@@ -423,7 +423,10 @@ async function runReplyCycle() {
           replyText: reply,
           replyIndex: 1,
           wasRecommended: true,
-          source: tweet.source || 'unknown'
+          source: tweet.source || 'unknown',
+          language: result.language,
+          style: style,
+          score: tweet.score
         })
 
         // Registra fonte para learning system
