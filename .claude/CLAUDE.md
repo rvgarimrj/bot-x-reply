@@ -13,13 +13,20 @@
 > **TUDO que eu faço deve contribuir para atingir 500 seguidores Premium.**
 > Sem isso, não há monetização. Esta é a ÚNICA métrica que importa.
 
-## Status Atual (verificar daily-report)
+## Status Atual (04/02/2026 - 15:35h)
 ```
 Meta:       500 Premium followers
 Atual:      28
 Faltam:     472
-Ritmo:      0/dia (CRÍTICO!)
-Previsão:   NUNCA
+Ritmo:      Analisando...
+
+HOJE:
+├─ Daemon replies: 34
+├─ Reply-to-Reply: 8 ✅ (+ @paulg respondeu!)
+├─ Idiomas: EN=22, PT=2, other=10
+├─ Estilos únicos: 13 ✅ (variando bem!)
+├─ Daemon: ✅ Rodando desde 5:39 AM
+└─ Crontab R2R: ✅ A cada 15min (8h-23h)
 ```
 
 ## A Fórmula do Crescimento
@@ -63,7 +70,10 @@ SEM author replies = SEM boost = SEM crescimento
 - 20% reaction (reação curta)
 - 15% agreeing
 
-**Estilos observados após fix**: observation, experience, memory, cetico, add_context, disagree, personal_take (7 diferentes!)
+**Estilos observados após fix (04/02 18:45h)**:
+- EN: personal_take, observation, experience, memory, add_context, disagree, contrarian, direct, question, skeptic
+- PT: cetico, contrario
+- **13 estilos diferentes em uso!** ✅
 
 ## 🔧 BUGS CORRIGIDOS 04/02
 
@@ -113,6 +123,85 @@ cat data/knowledge.json | jq '.replies[-1] | {language, style, score}'
 # Ver breakdown de idiomas de hoje
 cat data/knowledge.json | jq '[.replies[] | select(.timestamp | startswith("2026-02-04"))] | group_by(.language) | .[] | "\(.[0].language): \(length)"'
 ```
+
+## 🔄 NOVO: Reply-to-Reply (04/02/2026)
+
+### O que é
+Sistema para responder automaticamente pessoas que respondem aos nossos tweets/replies.
+
+### Por que importa
+- Author reply = 75x boost algorítmico
+- Se **EU** respondo quem me respondeu → mais conversa → mais visibilidade
+- Tom gentil + humor + emojis = mais engajamento
+
+### Regras
+1. **Máximo 2 replies por pessoa por thread** - Depois o usuário assume manualmente
+2. **Sempre curtir** o reply da pessoa antes de responder
+3. **Tom**: Gentil, humorístico, casual
+4. **Tamanho**: Máximo 50 caracteres
+5. **Emojis**: 1-2 no final (🙏💙😅🤣👍)
+
+### Arquivo
+`scripts/reply-to-reply.js`
+
+### Execução
+```bash
+# Dry-run (testa sem postar)
+node scripts/reply-to-reply.js --dry-run
+
+# Produção (posta de verdade)
+node scripts/reply-to-reply.js
+
+# Daemon contínuo
+node scripts/reply-to-reply.js --daemon
+```
+
+### Crontab (automático)
+```
+*/15 8-23 * * * node scripts/reply-to-reply.js >> logs/reply-to-reply.log 2>&1
+```
+Roda a cada 15 minutos das 8h às 23h.
+
+### Exemplos de Respostas Geradas
+| Reply recebido | Nossa resposta |
+|----------------|----------------|
+| "Feel better soon!" | "thanks so much! 🙏💙" |
+| "Did you just join us today lol" | "lol yeah just catching up now 😅🤣" |
+| "I guess you've been in a cave" | "haha very likely 🤣😅" |
+
+### 🏆 APRENDIZADO (04/02): Sentimento > Concordância Vazia
+
+**Insight**: Respostas com SENTIMENTO GENUÍNO são melhores que só concordar.
+
+| ❌ Ruim (vazio) | ✅ Bom (com sentimento) |
+|----------------|------------------------|
+| "makes sense" | "that's amazing at her age 👏" |
+| "cool" | "love this approach! 🔥" |
+| "agree" | "such an inspiring story 🙏" |
+
+**Contexto**: @paulg respondeu nosso tweet e nós respondemos com elogio genuíno em vez de concordância vazia. Author reply de VIP = máximo boost!
+
+### ⚠️ BUG CORRIGIDO (04/02): URL Errada nas Notificações
+
+**Problema**: Bot postou "hope you're feeling better now!" no post da @FoxNews (sequestro) em vez do @CherylsLogic (gripe).
+
+**Causa**: Notificação "Em resposta a @CherylsLogic @gabrielabiramia e @FoxNews" tinha múltiplos @mentions, e o seletor `timeEl.parentElement.href` pegava URL errada.
+
+**Correção**: Novo algoritmo procura link que contém o username do autor identificado:
+```javascript
+// Procura link que pertence ao autor
+const allLinks = article.querySelectorAll('a[href*="/status/"]')
+for (const link of allLinks) {
+  if (href.includes(`/${author.toLowerCase()}/status/`)) {
+    tweetLink = href // ✅ Link correto!
+  }
+}
+```
+
+### Estado Persistente
+- `data/reply-to-reply-state.json` - IDs já respondidos + contador por pessoa/thread
+
+---
 
 ## Métricas Chave (prioridade)
 1. **Author Reply Rate** - Meta: >15% (hoje: 0%)
@@ -195,6 +284,7 @@ Verificado nos logs - todas funcionando:
 ### 🤖 Automação Configurada (crontab)
 | Horário | Script | Função |
 |---------|--------|--------|
+| ***/15 8-23h** | **reply-to-reply.js** | **NOVO! Responde replies (gentil+humor)** |
 | 14:00 | collect-metrics.js | Coleta likes/replies |
 | 22:00 | collect-metrics.js | Segunda coleta |
 | 23:00 | analyze-and-learn.js | Gera insights |
