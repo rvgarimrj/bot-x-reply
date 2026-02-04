@@ -325,6 +325,22 @@ for (const link of allLinks) {
 
 **Correção**: Adicionado `process.exit(0)` no final do modo não-daemon
 
+### ⚠️ BUG CORRIGIDO (04/02): R2R não detectava replies
+
+**Problema**: Sistema rodava a cada 15min mas encontrava "0 replies" mesmo tendo replies novos
+
+**Causa 1**: Script ia para `/notifications/mentions` mas replies estão na aba "Tudo" (`/notifications`)
+
+**Causa 2**: Filtro `tweetLink.includes(author)` muito restrito descartava replies válidos
+
+**Correção**:
+```javascript
+// URL: /notifications/mentions → /notifications
+// Filtro: relaxado para aceitar qualquer tweetLink válido
+```
+
+**Commit**: `217d870`
+
 ### Estado Persistente
 - `data/reply-to-reply-state.json` - IDs já respondidos + contador por pessoa/thread
 
