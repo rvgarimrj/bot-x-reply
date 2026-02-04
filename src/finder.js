@@ -1,10 +1,11 @@
-import { readFileSync } from 'fs'
+import { readFileSync, existsSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { analyzeTweetPotential } from './claude.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
+const KNOWLEDGE_PATH = join(__dirname, '../data/knowledge.json')
 
 // Carrega configurações
 const accountsPath = join(__dirname, '../config/accounts.json')
@@ -174,19 +175,75 @@ export function getTopAccountsEngaged(limit = 5) {
 }
 
 /**
- * Retorna estatísticas do dia
+ * Lê replies do dia do knowledge.json (fonte de verdade)
+ */
+function getRepliesFromKnowledge(dateStr) {
+  try {
+    if (!existsSync(KNOWLEDGE_PATH)) return []
+    const knowledge = JSON.parse(readFileSync(KNOWLEDGE_PATH, 'utf-8'))
+    const replies = knowledge.replies || []
+    // Filtra replies do dia especificado
+    return replies.filter(r => r.timestamp && r.timestamp.startsWith(dateStr))
+  } catch (e) {
+    console.warn('Erro ao ler knowledge.json:', e.message)
+    return []
+  }
+}
+
+/**
+ * Retorna estatísticas do dia - LÊ DO KNOWLEDGE.JSON para dados precisos!
  */
 export function getDailyStats() {
   checkDailyReset()
+
+  // Formato da data para busca no knowledge.json: "2026-02-03"
+  const today = new Date()
+  const dateStr = today.toISOString().split('T')[0]
+
+  // Lê replies REAIS do knowledge.json
+  const todayReplies = getRepliesFromKnowledge(dateStr)
+
+  // Calcula estatísticas reais
+  const languageBreakdown = { en: 0, pt: 0, other: 0 }
+  const accountsMap = new Map()
+  let errors = 0
+
+  for (const reply of todayReplies) {
+    // Idioma
+    const lang = reply.language || 'other'
+    if (lang === 'en' || lang === 'pt') {
+      languageBreakdown[lang]++
+    } else {
+      languageBreakdown.other++
+    }
+
+    // Contas
+    if (reply.tweetAuthor) {
+      const author = reply.tweetAuthor.toLowerCase()
+      accountsMap.set(author, (accountsMap.get(author) || 0) + 1)
+    }
+  }
+
+  // Top accounts
+  const topAccounts = Array.from(accountsMap.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([account, count]) => ({ account, count }))
+
+  const repliesPosted = todayReplies.length
+
+  // Também atualiza o state in-memory para consistência
+  state.dailyStats.repliesPosted = Math.max(state.dailyStats.repliesPosted, repliesPosted)
+
   return {
     date: state.dailyStats.date,
-    repliesPosted: state.dailyStats.repliesPosted,
+    repliesPosted,
     tweetsAnalyzed: state.dailyStats.tweetsAnalyzed,
     errors: state.dailyStats.errors,
-    languageBreakdown: { ...state.dailyStats.languageBreakdown },
-    topAccounts: getTopAccountsEngaged(5),
-    successRate: state.dailyStats.repliesPosted > 0
-      ? Math.round(((state.dailyStats.repliesPosted - state.dailyStats.errors) / state.dailyStats.repliesPosted) * 100)
+    languageBreakdown,
+    topAccounts,
+    successRate: repliesPosted > 0
+      ? Math.round(((repliesPosted - errors) / repliesPosted) * 100)
       : 100
   }
 }
