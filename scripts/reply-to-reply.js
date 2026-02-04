@@ -139,7 +139,7 @@ async function findRepliesToOurReplies(browser) {
 
     // Vai para notificações
     console.log('Acessando notificações...')
-    await page.goto('https://x.com/notifications/mentions', { waitUntil: 'networkidle2' })
+    await page.goto('https://x.com/notifications', { waitUntil: 'networkidle2' })
     await new Promise(r => setTimeout(r, 3000))
 
     // Busca notificações de reply
@@ -184,7 +184,8 @@ async function findRepliesToOurReplies(browser) {
           // Verifica se é uma resposta (tem "Replying to")
           const replyingTo = article.innerText?.includes('Replying to')
 
-          if (author && text && tweetId && tweetLink.includes(author.toLowerCase())) {
+          // Aceita se temos autor, texto e tweetId válido
+          if (author && text && tweetId && tweetLink) {
             items.push({
               author,
               text: text.slice(0, 280),
