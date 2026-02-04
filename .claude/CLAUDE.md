@@ -38,6 +38,30 @@ SEM author replies = SEM boost = SEM crescimento
 | Opinião pessoal | Análises detalhadas |
 | Humor casual | Frases formais |
 | Pedir opinião do autor | Concordar passivamente |
+| **VARIAR começos** | Sempre "wait..." (padrão bot) |
+| Mistura de estilos | Só perguntas (detectável) |
+
+## 🔴 APRENDIZADO 04/02: Padrão "wait..." Detectado!
+
+**Problema identificado**: 7 de 10 últimos replies começavam com "wait"
+- "wait how do you know they're all on welfare?"
+- "wait what happened with the minneapolis mayor situation?"
+- etc.
+
+**Causa**: `mustAskQuestion: true` + exemplos no prompt com "wait"
+
+**Correção aplicada**:
+1. `mustAskQuestion: false` (permite variedade)
+2. `questioning: 60% → 40%` (menos perguntas)
+3. Removido "wait" dos exemplos do prompt
+4. Adicionado "contrarian" e "reaction" aos estilos
+5. Nova regra: `avoidWait: true`
+
+**Novo mix de estilos**:
+- 40% perguntas
+- 25% contrarian (opinião diferente)
+- 20% reaction (reação curta)
+- 15% agreeing
 
 ## Métricas Chave (prioridade)
 1. **Author Reply Rate** - Meta: >15% (hoje: 0%)
