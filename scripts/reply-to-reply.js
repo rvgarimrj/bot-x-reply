@@ -471,6 +471,7 @@ async function main() {
     }
   } else {
     await runCycle(dryRun)
+    process.exit(0) // Força saída quando não é daemon
   }
 }
 
