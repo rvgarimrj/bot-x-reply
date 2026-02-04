@@ -198,6 +198,29 @@ for (const link of allLinks) {
 }
 ```
 
+### ⚠️ BUG CORRIGIDO (04/02): Crontab "node: command not found"
+
+**Problema**: Crontab do Reply-to-Reply não executava - erro "node: command not found"
+
+**Causa**: Cron roda com PATH mínimo (`/usr/bin:/bin`) e não encontra `node` em `/usr/local/bin/`
+
+**Correção**: Usar caminho completo do node em TODOS os crontabs:
+```bash
+# ERRADO (não funciona no cron)
+*/15 8-23 * * * cd /path && node scripts/reply-to-reply.js
+
+# CORRETO
+*/15 8-23 * * * cd /path && /usr/local/bin/node scripts/reply-to-reply.js
+```
+
+### ⚠️ BUG CORRIGIDO (04/02): Script R2R travava (sem exit)
+
+**Problema**: Script reply-to-reply.js não terminava, causando múltiplos processos travados
+
+**Causa**: Puppeteer mantém conexão aberta, processo não encerra
+
+**Correção**: Adicionado `process.exit(0)` no final do modo não-daemon
+
 ### Estado Persistente
 - `data/reply-to-reply-state.json` - IDs já respondidos + contador por pessoa/thread
 
