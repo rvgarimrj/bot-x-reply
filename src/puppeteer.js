@@ -431,6 +431,36 @@ export async function postReply(url, replyText) {
       return { success: false, error: 'replies_restricted', skippable: true }
     }
 
+    // Verifica se autor bloqueou a conta
+    const isBlocked = await page.evaluate(() => {
+      const pageText = document.body.innerText || ''
+      const blockedPatterns = [
+        'este autor te bloqueou',
+        'this author has blocked you',
+        'autor te bloqueou',
+        'author blocked you',
+        'você foi bloqueado',
+        'you have been blocked',
+        'não pode fazer essa ação',
+        'cannot perform this action'
+      ]
+      const lowerText = pageText.toLowerCase()
+      return blockedPatterns.some(pattern => lowerText.includes(pattern))
+    })
+
+    if (isBlocked) {
+      console.log('🚫 Autor bloqueou a conta - pulando')
+      // Tenta fechar modal se existir
+      await page.evaluate(() => {
+        const btn = document.querySelector('button')
+        if (btn && (btn.textContent?.includes('Entendi') || btn.textContent?.includes('OK'))) {
+          btn.click()
+        }
+      }).catch(() => {})
+      await safeClosePage(browser, page)
+      return { success: false, error: 'author_blocked', skippable: true }
+    }
+
     // Scroll para ver o tweet
     await humanScroll(page)
 
@@ -535,6 +565,41 @@ export async function postReply(url, replyText) {
 
       return false
     })
+
+    // Aguarda um pouco e verifica se apareceu modal de erro (bloqueado, etc)
+    await humanDelay({ min: 1000, max: 1500 })
+
+    const errorModal = await page.evaluate(() => {
+      const modalText = document.body.innerText?.toLowerCase() || ''
+      const errorPatterns = [
+        'autor te bloqueou',
+        'author blocked',
+        'não pode fazer essa ação',
+        'cannot perform this action',
+        'algo deu errado',
+        'something went wrong'
+      ]
+
+      if (errorPatterns.some(p => modalText.includes(p))) {
+        // Tenta fechar o modal
+        const buttons = document.querySelectorAll('button, [role="button"]')
+        for (const btn of buttons) {
+          const text = btn.textContent?.toLowerCase() || ''
+          if (text.includes('entendi') || text.includes('ok') || text.includes('fechar')) {
+            btn.click()
+            return 'blocked'
+          }
+        }
+        return 'error'
+      }
+      return null
+    })
+
+    if (errorModal) {
+      console.log('🚫 Modal de erro detectado - autor pode ter bloqueado')
+      await safeClosePage(browser, page)
+      return { success: false, error: 'author_blocked', skippable: true }
+    }
 
     // Aguarda modal ou área inline aparecer
     await humanDelay(HUMAN_CONFIG.delays.afterClick)
