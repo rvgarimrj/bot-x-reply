@@ -182,49 +182,86 @@ async function getBrowser() {
 async function humanType(page, selector, text) {
   await page.waitForSelector(selector, { timeout: 10000 })
 
-  // Clica no campo para focar
-  await page.click(selector)
-  await humanDelay({ min: 500, max: 800 })
+  // FECHA qualquer modal/popup que esteja aberto (ex: atalhos)
+  await page.keyboard.press('Escape')
+  await humanDelay({ min: 200, max: 300 })
 
-  // Foca no elemento correto do X (contenteditable)
-  await page.evaluate(() => {
-    const textbox = document.querySelector('[data-testid="tweetTextarea_0"]')
-      || document.querySelector('[contenteditable="true"][role="textbox"]')
-      || document.querySelector('[data-testid="tweetTextarea_0RichTextInputContainer"]')
-
-    if (textbox) {
-      textbox.focus()
-      // Clica para garantir o cursor
-      textbox.click()
+  // CLICA DIRETAMENTE no textbox do modal de reply
+  // Pega coordenadas do último textbox (reply modal)
+  const coords = await page.evaluate(() => {
+    const allTextboxes = document.querySelectorAll('[data-testid="tweetTextarea_0"], [contenteditable="true"][role="textbox"]')
+    if (allTextboxes.length > 0) {
+      const last = allTextboxes[allTextboxes.length - 1]
+      const rect = last.getBoundingClientRect()
+      // Verifica se está visível
+      if (rect.width > 0 && rect.height > 0) {
+        return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+      }
     }
+    return null
   })
 
+  if (coords) {
+    console.log(`Clicando no textbox (coords: ${Math.round(coords.x)}, ${Math.round(coords.y)})...`)
+    // Clica duas vezes para garantir foco
+    await page.mouse.click(coords.x, coords.y)
+    await humanDelay({ min: 200, max: 300 })
+    await page.mouse.click(coords.x, coords.y)
+    await humanDelay({ min: 300, max: 500 })
+  } else {
+    // Fallback: tenta o seletor passado
+    console.log('Coords não encontradas, tentando seletor...')
+    try {
+      await page.click(selector)
+      await humanDelay({ min: 300, max: 500 })
+    } catch (e) {
+      console.log(`Click no selector falhou: ${e.message}`)
+    }
+  }
+
+  // Delay antes de digitar
   await humanDelay({ min: 200, max: 400 })
 
   // Usa keyboard.type com delay humanizado
-  // delay: 50-120ms por char = texto de 100 chars leva 5-12 segundos (mais humano)
   const { min, max } = HUMAN_CONFIG.typingSpeed
-  const charDelay = min + Math.floor(Math.random() * (max - min)) // 50-120ms
+  const charDelay = min + Math.floor(Math.random() * (max - min))
   console.log(`Digitando ${text.length} chars (delay: ${charDelay}ms/char)...`)
 
   await page.keyboard.type(text, { delay: charDelay })
 
   // Verifica se o texto foi inserido
-  const textInserted = await page.evaluate(() => {
-    const textbox = document.querySelector('[data-testid="tweetTextarea_0"]')
-      || document.querySelector('[contenteditable="true"][role="textbox"]')
-    return textbox && textbox.textContent && textbox.textContent.trim().length > 0
-  })
+  const textInserted = await page.evaluate((expectedText) => {
+    const allTextboxes = document.querySelectorAll('[data-testid="tweetTextarea_0"], [contenteditable="true"][role="textbox"]')
+    for (const textbox of allTextboxes) {
+      const content = textbox.textContent?.trim() || ''
+      if (content.length > 0 && content.includes(expectedText.slice(0, 20))) {
+        return true
+      }
+    }
+    return false
+  }, text)
 
   if (!textInserted) {
-    console.log('Texto não detectado, tentando método alternativo...')
-    // Fallback: tenta clicar e digitar novamente
-    await page.click(selector)
-    await humanDelay({ min: 300, max: 500 })
-    await page.keyboard.type(text, { delay: charDelay })
+    console.log('⚠️ Texto não detectado no campo, tentando método alternativo...')
+    // Método alternativo: triple-click para selecionar tudo, depois digita
+    const coords2 = await page.evaluate(() => {
+      const allTextboxes = document.querySelectorAll('[data-testid="tweetTextarea_0"], [contenteditable="true"][role="textbox"]')
+      if (allTextboxes.length > 0) {
+        const last = allTextboxes[allTextboxes.length - 1]
+        const rect = last.getBoundingClientRect()
+        return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+      }
+      return null
+    })
+
+    if (coords2) {
+      await page.mouse.click(coords2.x, coords2.y, { clickCount: 3 }) // Triple click selects all
+      await humanDelay({ min: 200, max: 400 })
+      await page.keyboard.type(text, { delay: charDelay })
+    }
   }
 
-  // Delay depois (simula humano verificando o texto)
+  // Delay depois
   await humanDelay({ min: 400, max: 700 })
 }
 
