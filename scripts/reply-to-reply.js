@@ -138,6 +138,11 @@ async function findRepliesToOurReplies(browser) {
     const page = await browser.newPage()
     await page.setDefaultTimeout(60000)
 
+    // Handler para dialogs (aceita beforeunload automaticamente)
+    page.on('dialog', async dialog => {
+      await dialog.accept()
+    })
+
     // Vai para notificações
     console.log('Acessando notificações...')
     await page.goto('https://x.com/notifications', { waitUntil: 'networkidle2' })
@@ -206,7 +211,16 @@ async function findRepliesToOurReplies(browser) {
 
     while (scrollNum < MAX_SCROLLS && emptyScrolls < MAX_EMPTY_SCROLLS) {
       const prevSeenCount = seenIds.size
-      const notifications = await parseNotifications()
+
+      let notifications
+      try {
+        notifications = await parseNotifications()
+      } catch (scrollErr) {
+        // Frame detached ou page fechada por outro processo
+        console.log(`⚠️ Frame perdido no scroll ${scrollNum}: ${scrollErr.message}`)
+        console.log('Continuando com o que já foi coletado...')
+        break
+      }
 
       // Processa notificações encontradas
       for (const notif of notifications) {
@@ -237,7 +251,12 @@ async function findRepliesToOurReplies(browser) {
       // Scroll para carregar mais
       scrollNum++
       if (scrollNum < MAX_SCROLLS && emptyScrolls < MAX_EMPTY_SCROLLS) {
-        await page.evaluate(() => window.scrollBy(0, 800))
+        try {
+          await page.evaluate(() => window.scrollBy(0, 800))
+        } catch {
+          console.log('⚠️ Frame perdido durante scroll, parando...')
+          break
+        }
         await new Promise(r => setTimeout(r, 1500))
       }
     }
@@ -246,7 +265,7 @@ async function findRepliesToOurReplies(browser) {
       console.log(`Fim das notificações (${scrollNum} scrolls, ${emptyScrolls} vazios)`)
     }
 
-    await page.close()
+    await page.close().catch(() => {})
 
     console.log(`Encontrados ${replies.length} replies para responder (de ${seenIds.size} verificados)`)
     return replies
@@ -265,6 +284,10 @@ async function fetchThreadContext(browser, tweetUrl) {
   try {
     page = await browser.newPage()
     await page.setDefaultTimeout(30000)
+
+    page.on('dialog', async dialog => {
+      await dialog.accept()
+    })
 
     console.log('📖 Lendo contexto da thread...')
     await page.goto(tweetUrl, { waitUntil: 'networkidle2' })
@@ -395,21 +418,32 @@ async function likeAndReply(browser, tweetUrl, replyText) {
   console.log(`Navegando para: ${tweetUrl}`)
   console.log(`Digitando: "${replyText}"`)
 
-  try {
-    // Usa a função postReply do daemon que FUNCIONA
-    const result = await daemonPostReply(tweetUrl, replyText)
+  // Retry: contextos podem ser destruídos por conflito com daemon
+  const MAX_RETRIES = 2
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const result = await daemonPostReply(tweetUrl, replyText)
 
-    if (result && result.success) {
-      console.log('✅ Reply postado!')
-      return true
-    } else {
-      console.log('❌ Falha ao postar:', result?.error || 'erro desconhecido')
-      return false
+      if (result && result.success) {
+        console.log('✅ Reply postado!')
+        return true
+      } else if (result?.error === 'replies_restricted' || result?.error === 'author_blocked') {
+        console.log(`⏭️ Pulando: ${result.error}`)
+        return false
+      } else {
+        console.log(`❌ Falha ao postar (tentativa ${attempt}/${MAX_RETRIES}):`, result?.error || 'erro desconhecido')
+      }
+    } catch (e) {
+      console.log(`❌ Erro (tentativa ${attempt}/${MAX_RETRIES}):`, e.message)
     }
-  } catch (e) {
-    console.error('Erro ao postar reply:', e.message)
-    return false
+
+    if (attempt < MAX_RETRIES) {
+      console.log('Aguardando 5s antes de retry...')
+      await new Promise(r => setTimeout(r, 5000))
+    }
   }
+
+  return false
 }
 
 /**

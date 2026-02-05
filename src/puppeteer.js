@@ -304,10 +304,11 @@ export async function extractTweet(url) {
   const { browser, shouldClose } = await getBrowser()
 
   try {
-    // Fecha abas em excesso para liberar memória do Chrome
-    await closeExcessTabs(browser, 3)
-
     const page = await browser.newPage()
+
+    // Fecha abas em excesso DEPOIS de criar a nova (protege a atual)
+    // maxTabs=6 para não fechar abas de outros processos (R2R, etc)
+    await closeExcessTabs(browser, 6, page)
 
     // Aumenta timeouts para operações na página
     page.setDefaultTimeout(60000)
@@ -407,7 +408,8 @@ export async function postReply(url, replyText) {
     await page.setViewport({ width: 1280, height: 800 })
 
     // Fecha abas em excesso DEPOIS de criar a nova (protege a atual)
-    await closeExcessTabs(browser, 3, page)
+    // maxTabs=6 para não fechar abas de outros processos (R2R, etc)
+    await closeExcessTabs(browser, 6, page)
 
     console.log('Navegando para:', url)
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 })
@@ -843,11 +845,11 @@ export async function checkLogin() {
   const { browser, shouldClose } = await getBrowser()
 
   try {
-    await closeExcessTabs(browser, 3)
-
     const page = await browser.newPage()
     page.setDefaultTimeout(60000)
     page.setDefaultNavigationTimeout(60000)
+
+    await closeExcessTabs(browser, 6, page)
 
     await page.goto('https://x.com/home', { waitUntil: 'networkidle2', timeout: 60000 })
 
