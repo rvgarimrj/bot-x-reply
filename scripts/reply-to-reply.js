@@ -387,6 +387,12 @@ Responda APENAS com o texto do reply (sem aspas, sem explicação):`
  * Curte e responde um tweet usando a função do daemon (que funciona!)
  */
 async function likeAndReply(browser, tweetUrl, replyText) {
+  // IMPORTANTE: Nunca responder nossos próprios tweets!
+  if (tweetUrl.toLowerCase().includes(`/${CONFIG.myUsername.toLowerCase()}/`)) {
+    console.log(`⚠️ BLOQUEADO: URL é do próprio usuário (${tweetUrl})`)
+    return false
+  }
+
   console.log(`Navegando para: ${tweetUrl}`)
   console.log(`Digitando: "${replyText}"`)
 
