@@ -489,11 +489,52 @@ export async function postReply(url, replyText) {
       throw new Error('Tweet com replies restritos (verificado via DOM)')
     }
 
-    // MÉTODO: Clica no botão de reply primeiro para garantir que área esteja aberta
+    // MÉTODO: Clica no botão de reply do tweet ESPECÍFICO (focado na URL)
     console.log('Abrindo área de reply...')
 
-    // Sempre clica no botão de reply para abrir a área (mais confiável)
-    const replyButtonClicked = await humanClick(page, '[data-testid="reply"]').catch(() => false)
+    // Encontra o tweet principal/focado e clica no SEU botão de reply
+    // (não no primeiro reply button da página que pode ser de outro tweet)
+    const replyButtonClicked = await page.evaluate(() => {
+      // Procura tweets na página
+      const tweets = document.querySelectorAll('article[data-testid="tweet"]')
+
+      // O tweet focado geralmente é o que tem a área de reply inline visível
+      // ou é o último tweet principal antes da seção de replies
+      for (const tweet of tweets) {
+        // Verifica se este tweet tem a área de reply inline (indica que é o focado)
+        const hasInlineReply = tweet.querySelector('[data-testid="tweetTextarea_0"]')
+          || tweet.parentElement?.querySelector('[placeholder*="resposta"]')
+          || tweet.parentElement?.querySelector('[placeholder*="reply"]')
+
+        if (hasInlineReply) {
+          // Encontrou o tweet com área de reply - clica no botão de reply dele
+          const replyBtn = tweet.querySelector('[data-testid="reply"]')
+          if (replyBtn) {
+            replyBtn.click()
+            return true
+          }
+        }
+      }
+
+      // Fallback: se não achou área inline, pega o ÚLTIMO tweet (que é o focado no URL)
+      const lastTweet = tweets[tweets.length - 1]
+      if (lastTweet) {
+        const replyBtn = lastTweet.querySelector('[data-testid="reply"]')
+        if (replyBtn) {
+          replyBtn.click()
+          return true
+        }
+      }
+
+      // Último fallback: primeiro botão de reply
+      const firstBtn = document.querySelector('[data-testid="reply"]')
+      if (firstBtn) {
+        firstBtn.click()
+        return true
+      }
+
+      return false
+    })
 
     // Aguarda modal ou área inline aparecer
     await humanDelay(HUMAN_CONFIG.delays.afterClick)
@@ -643,60 +684,50 @@ export async function postReply(url, replyText) {
     // Aguarda o reply ser enviado
     console.log('Aguardando confirmação do envio...')
 
-    // Verificação: espera modal fechar ou texto limpar (indica sucesso)
+    // Espera modal fechar primeiro
+    const modalClosed = await page.waitForFunction(() => {
+      const modal = document.querySelector('[role="dialog"]')
+      return !modal
+    }, { timeout: 10000 }).catch(() => null)
+
+    if (modalClosed) {
+      console.log('Modal fechou, verificando se reply foi postado...')
+    }
+
+    // Aguarda o X processar
+    await humanDelay({ min: 4000, max: 6000 })
+
+    // VERIFICAÇÃO OBRIGATÓRIA: Recarrega e busca nosso reply na thread
     let replyConfirmed = false
+    const replyStart = replyText.slice(0, 20).toLowerCase()
 
     try {
-      // Método 1: Espera modal fechar (se era modal)
-      const modalClosed = await page.waitForFunction(() => {
-        const modal = document.querySelector('[role="dialog"]')
-        return !modal // Modal fechou
-      }, { timeout: 10000 }).catch(() => null)
+      // Recarrega a página para ver o reply
+      console.log('Recarregando página para verificar...')
+      await page.reload({ waitUntil: 'networkidle2', timeout: 15000 })
+      await humanDelay({ min: 2000, max: 3000 })
 
-      if (modalClosed) {
-        console.log('✅ Modal fechou - reply enviado!')
-        replyConfirmed = true
-      } else {
-        // Método 2: Verifica se texto foi limpo
-        const textCleared = await page.evaluate(() => {
-          const textbox = document.querySelector('[data-testid="tweetTextarea_0"]')
-          return !textbox || !textbox.textContent?.trim()
-        })
-
-        if (textCleared) {
-          console.log('✅ Campo de texto limpo - reply enviado!')
-          replyConfirmed = true
-        }
-      }
-
-      // Aguarda um pouco mais para o X processar
-      await humanDelay({ min: 3000, max: 5000 })
-
-      // Método 3 (opcional): Verifica se reply apareceu na thread
-      if (!replyConfirmed) {
-        console.log('Verificando se reply apareceu na thread...')
-        const replyStart = replyText.slice(0, 25).toLowerCase()
-
-        replyConfirmed = await page.evaluate((searchText, myUsername) => {
-          const articles = document.querySelectorAll('article[data-testid="tweet"]')
-          for (const article of articles) {
-            const text = article.innerText?.toLowerCase() || ''
-            if (text.includes(searchText) && text.includes(myUsername.toLowerCase())) {
-              return true
-            }
+      // Busca nosso reply na thread
+      replyConfirmed = await page.evaluate((searchText, myUsername) => {
+        const articles = document.querySelectorAll('article[data-testid="tweet"]')
+        for (const article of articles) {
+          const text = article.innerText?.toLowerCase() || ''
+          // Verifica se tem nosso username E o início do texto do reply
+          if (text.includes(myUsername.toLowerCase()) && text.includes(searchText)) {
+            return true
           }
-          return false
-        }, replyStart, 'gabrielabiramia')
-
-        if (replyConfirmed) {
-          console.log('✅ Reply encontrado na thread!')
         }
+        return false
+      }, replyStart, 'gabrielabiramia')
+
+      if (replyConfirmed) {
+        console.log('✅ Reply confirmado na thread!')
+      } else {
+        console.log('⚠️ Reply NÃO encontrado na thread!')
       }
     } catch (e) {
       console.log('Erro ao verificar reply:', e.message)
-      // Se houve erro na verificação mas não houve erro no post,
-      // assume que o post foi bem sucedido
-      replyConfirmed = true
+      replyConfirmed = false
     }
 
     await humanDelay({ min: 1500, max: 2500 })
