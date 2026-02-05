@@ -181,37 +181,52 @@ cat data/knowledge.json | jq '.replies | length'
 | Resumo errado | `getDailyStats()` lê de knowledge.json |
 | "JavaScript world" error | Usar `page.evaluate()` (fix 2026-02-05) |
 | "Frame detached" error | Proteger página atual no `closeExcessTabs` |
-| Verificação falso negativo | Checar modal fechou, não reload página |
+| Reply vai p/ tweet errado | Encontrar tweet focado, não 1º da página |
+| Verificação falso positivo | SEMPRE recarregar e buscar reply na thread |
 
 ---
 
 ## 🔧 Correções R2R (2026-02-05)
 
-### Problema: R2R falhava ao postar replies
+### Problema 1: R2R falhava ao postar replies
 
 **Erros encontrados:**
 1. `Protocol error: Argument should belong to same JavaScript world`
 2. `Navigating frame was detached`
-3. Verificação reportava falha mesmo com post sucesso
 
-**Soluções implementadas em `src/puppeteer.js`:**
+**Soluções em `src/puppeteer.js`:**
 
 1. **humanType()** - Usa `page.evaluate()` para encontrar/clicar elementos
-   - Evita element handles que ficam stale entre operações async
+   - Evita element handles stale entre operações async
    - Usa `page.keyboard.type()` após focar via evaluate
 
 2. **closeExcessTabs()** - Recebe `currentPage` como parâmetro
    - Nunca fecha a página que está sendo usada
    - Cleanup acontece DEPOIS de criar nova página
 
-3. **Verificação de sucesso** - Checa se modal fechou
-   - Não recarrega página (evita cancelar post em andamento)
-   - Fallback: verifica se campo de texto limpou
+### Problema 2: Reply ia para tweet errado
+
+**Causa:** Seletor `[data-testid="reply"]` pegava o 1º botão (do tweet pai), não do tweet alvo.
+
+**Solução:** Nova lógica para encontrar tweet correto:
+1. Procura tweet com área de reply inline (o focado)
+2. Fallback: último tweet da thread
+3. Clica no reply button DAQUELE tweet específico
+
+### Problema 3: Verificação falso positivo
+
+**Causa:** "Modal fechou" era assumido como sucesso, mas modal pode fechar por erro.
+
+**Solução:** Verificação OBRIGATÓRIA:
+1. Recarrega página após post
+2. Busca nosso reply na thread
+3. Só retorna sucesso se encontrar
 
 **Commits:**
 - `e742dc9` - fix: Robust reply posting - context issues and verification
+- `b4a701e` - fix: Target correct tweet for reply + mandatory verification
 
-**Resultado:** 2/2 replies postados com sucesso nos testes
+**Resultado:** @joelteply reply postado e verificado com sucesso
 
 ---
 
