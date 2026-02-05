@@ -128,10 +128,11 @@ async function connectChrome() {
 }
 
 /**
- * Busca replies aos nossos tweets via notificações
+ * Busca replies aos nossos tweets via notificações (COM SCROLL)
  */
 async function findRepliesToOurReplies(browser) {
   const replies = []
+  const seenIds = new Set()
 
   try {
     const page = await browser.newPage()
@@ -142,77 +143,94 @@ async function findRepliesToOurReplies(browser) {
     await page.goto('https://x.com/notifications', { waitUntil: 'networkidle2' })
     await new Promise(r => setTimeout(r, 3000))
 
-    // Busca notificações de reply
-    const notifications = await page.evaluate(() => {
-      const items = []
-      const articles = document.querySelectorAll('article[data-testid="tweet"]')
+    // Função para parsear notificações visíveis
+    const parseNotifications = async () => {
+      return await page.evaluate(() => {
+        const items = []
+        const articles = document.querySelectorAll('article[data-testid="tweet"]')
 
-      for (const article of articles) {
-        try {
-          // Pega o texto do tweet
-          const textEl = article.querySelector('[data-testid="tweetText"]')
-          const text = textEl?.innerText || ''
+        for (const article of articles) {
+          try {
+            const textEl = article.querySelector('[data-testid="tweetText"]')
+            const text = textEl?.innerText || ''
 
-          // Pega o autor - procura link do perfil com @username
-          const authorLink = article.querySelector('a[href^="/"][tabindex="-1"]')
-          const author = authorLink?.href?.split('/')[3] || ''
+            const authorLink = article.querySelector('a[href^="/"][tabindex="-1"]')
+            const author = authorLink?.href?.split('/')[3] || ''
 
-          // CORRIGIDO: Pega o link do tweet DO AUTOR (não do tweet pai)
-          // Procura todos os links com /status/ e pega o que pertence ao autor
-          let tweetLink = ''
-          let tweetId = ''
+            let tweetLink = ''
+            let tweetId = ''
 
-          const allLinks = article.querySelectorAll('a[href*="/status/"]')
-          for (const link of allLinks) {
-            const href = link.href || ''
-            // Verifica se o link pertence ao autor identificado
-            if (author && href.toLowerCase().includes(`/${author.toLowerCase()}/status/`)) {
-              tweetLink = href
-              tweetId = href.split('/').pop()
-              break
+            const allLinks = article.querySelectorAll('a[href*="/status/"]')
+            for (const link of allLinks) {
+              const href = link.href || ''
+              if (author && href.toLowerCase().includes(`/${author.toLowerCase()}/status/`)) {
+                tweetLink = href
+                tweetId = href.split('/').pop()
+                break
+              }
             }
-          }
 
-          // Fallback: se não achou link do autor, pega o primeiro link de status
-          if (!tweetLink && allLinks.length > 0) {
-            // Pega o último link (geralmente é o tweet atual, não o citado)
-            const lastLink = allLinks[allLinks.length - 1]
-            tweetLink = lastLink.href || ''
-            tweetId = tweetLink.split('/').pop()
-          }
+            if (!tweetLink && allLinks.length > 0) {
+              const lastLink = allLinks[allLinks.length - 1]
+              tweetLink = lastLink.href || ''
+              tweetId = tweetLink.split('/').pop()
+            }
 
-          // Verifica se é uma resposta (tem "Replying to")
-          const replyingTo = article.innerText?.includes('Replying to')
+            const replyingTo = article.innerText?.includes('Replying to') ||
+                              article.innerText?.includes('Em resposta a')
 
-          // Aceita se temos autor, texto e tweetId válido
-          if (author && text && tweetId && tweetLink) {
-            items.push({
-              author,
-              text: text.slice(0, 280),
-              tweetId,
-              tweetUrl: tweetLink,
-              isReply: !!replyingTo
-            })
+            if (author && text && tweetId && tweetLink) {
+              items.push({
+                author,
+                text: text.slice(0, 280),
+                tweetId,
+                tweetUrl: tweetLink,
+                isReply: !!replyingTo
+              })
+            }
+          } catch (e) {
+            // ignora
           }
-        } catch (e) {
-          // ignora erros de parsing
+        }
+        return items
+      })
+    }
+
+    // Scroll múltiplo para encontrar mais notificações
+    const MAX_SCROLLS = 5
+    const MAX_NEW_REPLIES = 3  // Limite por ciclo para não exagerar
+
+    for (let scrollNum = 0; scrollNum < MAX_SCROLLS; scrollNum++) {
+      const notifications = await parseNotifications()
+
+      // Processa notificações encontradas
+      for (const notif of notifications) {
+        if (seenIds.has(notif.tweetId)) continue
+        seenIds.add(notif.tweetId)
+
+        if (notif.author.toLowerCase() !== CONFIG.myUsername.toLowerCase() &&
+            !state.repliedTo.has(notif.tweetId)) {
+          replies.push(notif)
+          console.log(`  → Novo: @${notif.author} - "${notif.text.slice(0, 40)}..."`)
         }
       }
 
-      return items.slice(0, 20)
-    })
+      // Se já encontrou replies suficientes, para
+      if (replies.length >= MAX_NEW_REPLIES) {
+        console.log(`Encontrados ${replies.length} novos - suficiente!`)
+        break
+      }
 
-    await page.close()
-
-    // Filtra apenas replies que não são nossos e que não respondemos ainda
-    for (const notif of notifications) {
-      if (notif.author.toLowerCase() !== CONFIG.myUsername.toLowerCase() &&
-          !state.repliedTo.has(notif.tweetId)) {
-        replies.push(notif)
+      // Scroll para carregar mais
+      if (scrollNum < MAX_SCROLLS - 1) {
+        await page.evaluate(() => window.scrollBy(0, 800))
+        await new Promise(r => setTimeout(r, 2000))
       }
     }
 
-    console.log(`Encontrados ${replies.length} replies para responder`)
+    await page.close()
+
+    console.log(`Encontrados ${replies.length} replies para responder (de ${seenIds.size} verificados)`)
     return replies
 
   } catch (e) {
