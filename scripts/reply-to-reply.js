@@ -222,38 +222,103 @@ async function findRepliesToOurReplies(browser) {
 }
 
 /**
- * Gera resposta gentil e humorística
+ * Busca contexto completo da thread antes de responder
  */
-async function generateFriendlyReply(theirReply, context = '') {
-  const prompt = `Você é Gabriel, respondendo a alguém que comentou no seu tweet.
+async function fetchThreadContext(browser, tweetUrl) {
+  let page
+  try {
+    page = await browser.newPage()
+    await page.setDefaultTimeout(30000)
 
-CONTEXTO DO TWEET ORIGINAL (se disponível):
-${context || 'N/A'}
+    console.log('📖 Lendo contexto da thread...')
+    await page.goto(tweetUrl, { waitUntil: 'networkidle2' })
+    await new Promise(r => setTimeout(r, 2000))
 
-REPLY DA PESSOA:
+    const context = await page.evaluate(() => {
+      const result = {
+        originalTweet: '',
+        myReply: '',
+        threadReplies: []
+      }
+
+      const articles = document.querySelectorAll('article[data-testid="tweet"]')
+
+      for (let i = 0; i < articles.length && i < 5; i++) {
+        const article = articles[i]
+        const textEl = article.querySelector('[data-testid="tweetText"]')
+        const text = textEl?.innerText || ''
+
+        // Identifica o autor
+        const authorLink = article.querySelector('a[href^="/"][tabindex="-1"]')
+        const author = authorLink?.href?.split('/')[3] || ''
+
+        if (i === 0) {
+          // Primeiro tweet é o original ou o contexto principal
+          result.originalTweet = text.slice(0, 500)
+        } else if (author.toLowerCase() === 'gabrielabiramia') {
+          result.myReply = text.slice(0, 300)
+        } else {
+          result.threadReplies.push({
+            author: author,
+            text: text.slice(0, 200)
+          })
+        }
+      }
+
+      return result
+    })
+
+    await page.close()
+    return context
+
+  } catch (e) {
+    console.log('⚠️ Erro ao buscar contexto:', e.message)
+    if (page) await page.close().catch(() => {})
+    return null
+  }
+}
+
+/**
+ * Gera resposta gentil e humorística COM CONTEXTO
+ */
+async function generateFriendlyReply(theirReply, context = null) {
+  // Monta contexto detalhado
+  let contextStr = ''
+  if (context) {
+    if (context.originalTweet) {
+      contextStr += `TWEET ORIGINAL: "${context.originalTweet}"\n\n`
+    }
+    if (context.myReply) {
+      contextStr += `MEU REPLY ANTERIOR: "${context.myReply}"\n\n`
+    }
+  }
+
+  const prompt = `Você é Gabriel (@gabrielabiramia), respondendo a alguém em uma conversa no Twitter/X.
+
+${contextStr ? '=== CONTEXTO DA CONVERSA ===\n' + contextStr : ''}
+=== REPLY DA PESSOA (para você responder) ===
 "${theirReply}"
 
 INSTRUÇÕES:
-1. Responda de forma GENTIL e AMIGÁVEL
-2. Se for algo engraçado/sarcástico → responda com humor, use 🤣😂😅
-3. Se for informação/ajuda → agradeça, use 🙏👍
-4. Se for pergunta → responda brevemente e simpaticamente
-5. Se for crítica → seja educado mas firme
-6. Se for desejo de melhoras (sick, etc) → agradeça com carinho 💙🙏
+1. LEIA O CONTEXTO para entender a conversa
+2. Responda de forma que faça SENTIDO com o que foi discutido
+3. Se for crítica ou correção → reconheça com humildade: "fair point", "you're right", "my bad"
+4. Se for pergunta → responda diretamente ao que foi perguntado
+5. Se for humor/sarcasmo → responda com humor
+6. Se for informação → agradeça de forma genuína
 
 REGRAS:
-- MÁXIMO 50 caracteres (muito curto!)
+- MÁXIMO 60 caracteres
 - Use 1-2 emojis no final
 - Seja casual e humano
-- NUNCA seja formal ou robótico
-- Pode usar "haha", "lol", "yeah", "true"
+- A resposta deve fazer SENTIDO no contexto da conversa
+- Se a pessoa estiver certa, admita
 
-EXEMPLOS:
-- "I guess you've been in a cave" → "very likely 🤣🤣"
-- "Hope you feel better" → "thanks! 🙏💙"
-- "That's not true" → "fair point actually 🤔"
-- "LOL same" → "right?? 😂"
-- "Great take!" → "thanks! 🙏"
+EXEMPLOS COM CONTEXTO:
+- Contexto: você disse algo controverso, pessoa corrige → "you're right, my bad 🤔"
+- Contexto: pessoa pergunta se você leu algo → "not fully tbh, will check 📚"
+- Contexto: pessoa concorda → "right?? 🙏"
+- Contexto: pessoa discorda educadamente → "fair point actually 👍"
 
 Responda APENAS com o texto do reply (sem aspas, sem explicação):`
 
@@ -376,8 +441,19 @@ async function processReply(browser, notification, dryRun = false) {
 
   console.log(`📊 @${notification.author}: ${currentCount}/${CONFIG.maxRepliesPerThread} replies`)
 
-  // Gera resposta
-  const response = await generateFriendlyReply(notification.text)
+  // NOVO: Busca contexto completo da thread
+  const context = await fetchThreadContext(browser, notification.tweetUrl)
+  if (context) {
+    if (context.originalTweet) {
+      console.log(`📄 Tweet original: "${context.originalTweet.slice(0, 80)}..."`)
+    }
+    if (context.myReply) {
+      console.log(`💬 Meu reply: "${context.myReply.slice(0, 60)}..."`)
+    }
+  }
+
+  // Gera resposta COM CONTEXTO
+  const response = await generateFriendlyReply(notification.text, context)
 
   if (!response) {
     console.log('❌ Não conseguiu gerar resposta')
