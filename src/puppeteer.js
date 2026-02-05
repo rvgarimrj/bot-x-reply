@@ -232,7 +232,8 @@ async function humanType(page, selector, text) {
   if (content.length > 0) {
     console.log(`✅ Texto inserido: "${content.slice(0, 30)}..."`)
   } else {
-    console.log('⚠️ Texto pode não ter sido inserido')
+    // LANÇA ERRO para que o código saiba que falhou
+    throw new Error('Texto não foi inserido no campo')
   }
 }
 
