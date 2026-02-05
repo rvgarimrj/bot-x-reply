@@ -179,6 +179,39 @@ cat data/knowledge.json | jq '.replies | length'
 | R2R não detecta | Verificar `/notifications` (não `/mentions`) |
 | Múltiplos daemons | `pkill -9 -f auto-daemon` |
 | Resumo errado | `getDailyStats()` lê de knowledge.json |
+| "JavaScript world" error | Usar `page.evaluate()` (fix 2026-02-05) |
+| "Frame detached" error | Proteger página atual no `closeExcessTabs` |
+| Verificação falso negativo | Checar modal fechou, não reload página |
+
+---
+
+## 🔧 Correções R2R (2026-02-05)
+
+### Problema: R2R falhava ao postar replies
+
+**Erros encontrados:**
+1. `Protocol error: Argument should belong to same JavaScript world`
+2. `Navigating frame was detached`
+3. Verificação reportava falha mesmo com post sucesso
+
+**Soluções implementadas em `src/puppeteer.js`:**
+
+1. **humanType()** - Usa `page.evaluate()` para encontrar/clicar elementos
+   - Evita element handles que ficam stale entre operações async
+   - Usa `page.keyboard.type()` após focar via evaluate
+
+2. **closeExcessTabs()** - Recebe `currentPage` como parâmetro
+   - Nunca fecha a página que está sendo usada
+   - Cleanup acontece DEPOIS de criar nova página
+
+3. **Verificação de sucesso** - Checa se modal fechou
+   - Não recarrega página (evita cancelar post em andamento)
+   - Fallback: verifica se campo de texto limpou
+
+**Commits:**
+- `e742dc9` - fix: Robust reply posting - context issues and verification
+
+**Resultado:** 2/2 replies postados com sucesso nos testes
 
 ---
 
