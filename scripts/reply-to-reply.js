@@ -19,6 +19,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import puppeteer from 'puppeteer-core'
+import { postReply as daemonPostReply } from '../src/puppeteer.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = join(__dirname, '..', 'data')
@@ -345,7 +346,7 @@ INSTRUÇÕES:
 
 REGRAS:
 - MÁXIMO 60 caracteres
-- Use 1-2 emojis no final
+- Use 1-2 emojis no final (🙏👍😅🤔✨🚶‍♀️📚 - NÃO use 💀🔥🚀)
 - Seja casual e humano
 - A resposta deve fazer SENTIDO no contexto da conversa
 - Se a pessoa estiver certa, admita
@@ -383,99 +384,26 @@ Responda APENAS com o texto do reply (sem aspas, sem explicação):`
 }
 
 /**
- * Curte e responde um tweet (usando keyboard.type que funciona no X)
+ * Curte e responde um tweet usando a função do daemon (que funciona!)
  */
 async function likeAndReply(browser, tweetUrl, replyText) {
-  let page
+  console.log(`Navegando para: ${tweetUrl}`)
+  console.log(`Digitando: "${replyText}"`)
+
   try {
-    page = await browser.newPage()
-    await page.setDefaultTimeout(60000)
+    // Usa a função postReply do daemon que FUNCIONA
+    const result = await daemonPostReply(tweetUrl, replyText)
 
-    console.log(`Navegando para: ${tweetUrl}`)
-    await page.goto(tweetUrl, { waitUntil: 'networkidle2' })
-    await new Promise(r => setTimeout(r, 2000))
-
-    // Curte o tweet (se ainda não curtiu)
-    console.log('Curtindo...')
-    try {
-      const alreadyLiked = await page.$('[data-testid="unlike"]')
-      if (alreadyLiked) {
-        console.log('👍 Já curtido')
-      } else {
-        const likeButton = await page.$('[data-testid="like"]')
-        if (likeButton) {
-          await likeButton.click()
-          await new Promise(r => setTimeout(r, 1000))
-          console.log('✅ Curtido!')
-        }
-      }
-    } catch (e) {
-      console.log('Like: erro ao verificar')
+    if (result && result.success) {
+      console.log('✅ Reply postado!')
+      return true
+    } else {
+      console.log('❌ Falha ao postar:', result?.error || 'erro desconhecido')
+      return false
     }
-
-    // Clica em reply
-    console.log('Abrindo reply...')
-    const replyButton = await page.$('[data-testid="reply"]')
-    if (!replyButton) {
-      throw new Error('Botão de reply não encontrado')
-    }
-    await replyButton.click()
-    await new Promise(r => setTimeout(r, 2000))
-
-    // Aguarda campo de texto aparecer
-    const textbox = await page.waitForSelector('[data-testid="tweetTextarea_0"]', { timeout: 8000 })
-    if (!textbox) {
-      throw new Error('Campo de texto não apareceu')
-    }
-
-    // Foca no campo e digita usando keyboard.type (FUNCIONA no X!)
-    console.log(`Digitando: "${replyText}"`)
-    await textbox.click()
-    await new Promise(r => setTimeout(r, 500))
-
-    // Foca no contenteditable correto
-    await page.evaluate(() => {
-      const el = document.querySelector('[data-testid="tweetTextarea_0"]')
-        || document.querySelector('[contenteditable="true"][role="textbox"]')
-      if (el) {
-        el.focus()
-        el.click()
-      }
-    })
-    await new Promise(r => setTimeout(r, 300))
-
-    // Digita usando keyboard.type (método que funciona!)
-    await page.keyboard.type(replyText, { delay: 50 })
-    await new Promise(r => setTimeout(r, 1000))
-
-    // Clica em postar (tenta ambos seletores)
-    const postSelectors = ['[data-testid="tweetButtonInline"]', '[data-testid="tweetButton"]']
-    let posted = false
-
-    for (const sel of postSelectors) {
-      try {
-        const btn = await page.$(sel)
-        if (btn) {
-          await btn.click()
-          await new Promise(r => setTimeout(r, 3000))
-          console.log('✅ Reply postado!')
-          posted = true
-          break
-        }
-      } catch {}
-    }
-
-    if (!posted) {
-      throw new Error('Botão de postar não encontrado')
-    }
-
-    return true
-
   } catch (e) {
     console.error('Erro ao postar reply:', e.message)
     return false
-  } finally {
-    if (page) await page.close().catch(() => {})
   }
 }
 
