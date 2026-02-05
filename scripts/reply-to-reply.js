@@ -76,14 +76,13 @@ function saveState() {
 }
 
 /**
- * Gera ID único para pessoa+thread
- * Limita replies POR PESSOA dentro de cada thread
+ * Gera ID único para pessoa
+ * Limita replies POR PESSOA (total, não por tweet)
+ * Corrigido: antes usava pessoa+tweetId, o que não somava corretamente
  */
 function getPersonThreadKey(author, tweetUrl) {
-  // Extrai o ID do tweet original da URL
-  const match = tweetUrl.match(/status\/(\d+)/)
-  const threadId = match ? match[1] : tweetUrl
-  return `${author.toLowerCase()}_${threadId}`
+  // Usa apenas o username para contar - limita por PESSOA total
+  return `person_${author.toLowerCase()}`
 }
 
 /**

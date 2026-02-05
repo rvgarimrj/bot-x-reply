@@ -394,6 +394,12 @@ export async function postReply(url, replyText) {
   try {
     const page = await browser.newPage()
 
+    // Handler para dialogs (aceita beforeunload automaticamente)
+    page.on('dialog', async dialog => {
+      console.log('Dialog detectado:', dialog.type(), dialog.message())
+      await dialog.accept()
+    })
+
     // Aumenta timeouts para operações na página
     page.setDefaultTimeout(60000) // 60s para operações gerais
     page.setDefaultNavigationTimeout(60000) // 60s para navegação

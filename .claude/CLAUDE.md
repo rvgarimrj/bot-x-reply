@@ -188,6 +188,8 @@ cat data/knowledge.json | jq '.replies | length'
 | "Frame detached" error | Proteger página atual no `closeExcessTabs` |
 | Reply vai p/ tweet errado | Encontrar tweet focado, não 1º da página |
 | Verificação falso positivo | SEMPRE recarregar e buscar reply na thread |
+| "Sair do site?" modal | Handler de dialog no Puppeteer (fix 2026-02-05) |
+| R2R contagem errada | Contador por PESSOA, não por tweet (fix 2026-02-05) |
 
 ---
 
@@ -232,6 +234,22 @@ cat data/knowledge.json | jq '.replies | length'
 - `b4a701e` - fix: Target correct tweet for reply + mandatory verification
 
 **Resultado:** @joelteply reply postado e verificado com sucesso
+
+### Problema 4: Modal "Sair do site?" bloqueava navegação
+
+**Causa:** Chrome mostra dialog `beforeunload` quando há texto não enviado no campo.
+
+**Solução em `src/puppeteer.js`:**
+- Adicionado handler `page.on('dialog')` que aceita automaticamente
+- Permite reload/navegação mesmo com drafts
+
+### Problema 5: Contagem de replies por pessoa errada
+
+**Causa:** Chave era `username_tweetId`, então mesma pessoa em tweets diferentes não somava.
+
+**Solução em `scripts/reply-to-reply.js`:**
+- Chave agora é apenas `person_username`
+- Limita 2 replies por PESSOA total, não por tweet
 
 ---
 
