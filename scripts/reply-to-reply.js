@@ -196,11 +196,16 @@ async function findRepliesToOurReplies(browser) {
       })
     }
 
-    // Scroll múltiplo para encontrar mais notificações
-    const MAX_SCROLLS = 5
-    const MAX_NEW_REPLIES = 3  // Limite por ciclo para não exagerar
+    // Scroll até não encontrar mais nada novo
+    const MAX_SCROLLS = 20  // Segurança: máximo absoluto
+    const MAX_NEW_REPLIES = 5  // Limite por ciclo
+    const MAX_EMPTY_SCROLLS = 3  // Para após 3 scrolls sem novidades
 
-    for (let scrollNum = 0; scrollNum < MAX_SCROLLS; scrollNum++) {
+    let emptyScrolls = 0
+    let scrollNum = 0
+
+    while (scrollNum < MAX_SCROLLS && emptyScrolls < MAX_EMPTY_SCROLLS) {
+      const prevSeenCount = seenIds.size
       const notifications = await parseNotifications()
 
       // Processa notificações encontradas
@@ -215,17 +220,30 @@ async function findRepliesToOurReplies(browser) {
         }
       }
 
+      // Verifica se encontrou algo novo neste scroll
+      const foundNew = seenIds.size > prevSeenCount
+      if (!foundNew) {
+        emptyScrolls++
+      } else {
+        emptyScrolls = 0  // Reset se encontrou algo
+      }
+
       // Se já encontrou replies suficientes, para
       if (replies.length >= MAX_NEW_REPLIES) {
-        console.log(`Encontrados ${replies.length} novos - suficiente!`)
+        console.log(`Encontrados ${replies.length} novos - limite atingido!`)
         break
       }
 
       // Scroll para carregar mais
-      if (scrollNum < MAX_SCROLLS - 1) {
+      scrollNum++
+      if (scrollNum < MAX_SCROLLS && emptyScrolls < MAX_EMPTY_SCROLLS) {
         await page.evaluate(() => window.scrollBy(0, 800))
-        await new Promise(r => setTimeout(r, 2000))
+        await new Promise(r => setTimeout(r, 1500))
       }
+    }
+
+    if (emptyScrolls >= MAX_EMPTY_SCROLLS) {
+      console.log(`Fim das notificações (${scrollNum} scrolls, ${emptyScrolls} vazios)`)
     }
 
     await page.close()
