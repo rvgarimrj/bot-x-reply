@@ -597,27 +597,43 @@ export async function postReply(url, replyText) {
     console.log('Aguardando confirmação do envio...')
     await humanDelay(HUMAN_CONFIG.delays.afterPost)
 
-    // Aguarda o campo de texto sumir (indica que reply foi enviado)
-    console.log('Verificando se reply foi enviado...')
+    // Verificação ROBUSTA: procura nosso reply na thread
+    console.log('Verificando se reply apareceu na thread...')
     let replyConfirmed = false
+
+    // Pega as primeiras palavras do reply para buscar
+    const replyStart = replyText.slice(0, 30).toLowerCase()
+
     try {
-      await page.waitForFunction(() => {
-        // Verifica se o campo de texto do reply sumiu ou está vazio
-        const textbox = document.querySelector('[data-testid="tweetTextarea_0"]')
-        if (!textbox) return true // Campo sumiu = reply enviado
-        const text = textbox.textContent || ''
-        return text.trim() === '' // Campo vazio = reply enviado
-      }, { timeout: 15000 })
-      replyConfirmed = true
-      console.log('Reply confirmado!')
-    } catch (e) {
-      console.log('Timeout aguardando confirmação, verificando URL...')
-      // Fallback: verifica se URL mudou ou se está na página do tweet
-      const currentUrl = page.url()
-      if (currentUrl.includes('/status/')) {
-        replyConfirmed = true
-        console.log('Ainda na página do tweet, assumindo sucesso')
+      // Aguarda 5 segundos para o reply aparecer
+      await new Promise(r => setTimeout(r, 5000))
+
+      // Recarrega a página para ver o reply
+      await page.reload({ waitUntil: 'networkidle2' })
+      await new Promise(r => setTimeout(r, 3000))
+
+      // Busca nosso reply na página
+      replyConfirmed = await page.evaluate((searchText, myUsername) => {
+        const articles = document.querySelectorAll('article[data-testid="tweet"]')
+        for (const article of articles) {
+          const text = article.innerText?.toLowerCase() || ''
+          const hasOurText = text.includes(searchText)
+          const hasOurUsername = text.includes(myUsername.toLowerCase())
+          if (hasOurText && hasOurUsername) {
+            return true // Encontrou nosso reply!
+          }
+        }
+        return false
+      }, replyStart, 'gabrielabiramia')
+
+      if (replyConfirmed) {
+        console.log('✅ Reply encontrado na thread!')
+      } else {
+        console.log('⚠️ Reply NÃO encontrado na thread após reload')
       }
+    } catch (e) {
+      console.log('Erro ao verificar reply:', e.message)
+      replyConfirmed = false
     }
 
     await humanDelay({ min: 2000, max: 3500 })
@@ -639,6 +655,12 @@ export async function postReply(url, replyText) {
       }
     } else {
       console.log('Reply não confirmado, mantendo página aberta para debug')
+      // IMPORTANTE: Retorna falha se não confirmou!
+      return {
+        success: false,
+        screenshot: screenshotPath,
+        error: 'Reply não encontrado na thread após verificação'
+      }
     }
 
     return {
