@@ -383,7 +383,7 @@ Responda APENAS com o texto do reply (sem aspas, sem explicação):`
 }
 
 /**
- * Curte e responde um tweet
+ * Curte e responde um tweet (usando keyboard.type que funciona no X)
  */
 async function likeAndReply(browser, tweetUrl, replyText) {
   let page
@@ -395,59 +395,81 @@ async function likeAndReply(browser, tweetUrl, replyText) {
     await page.goto(tweetUrl, { waitUntil: 'networkidle2' })
     await new Promise(r => setTimeout(r, 2000))
 
-    // Curte o tweet
+    // Curte o tweet (se ainda não curtiu)
     console.log('Curtindo...')
     try {
-      const likeButton = await page.$('[data-testid="like"]')
-      if (likeButton) {
-        await likeButton.click()
-        await new Promise(r => setTimeout(r, 1000))
-        console.log('✅ Curtido!')
+      const alreadyLiked = await page.$('[data-testid="unlike"]')
+      if (alreadyLiked) {
+        console.log('👍 Já curtido')
+      } else {
+        const likeButton = await page.$('[data-testid="like"]')
+        if (likeButton) {
+          await likeButton.click()
+          await new Promise(r => setTimeout(r, 1000))
+          console.log('✅ Curtido!')
+        }
       }
     } catch (e) {
-      console.log('Like: já curtido ou erro')
+      console.log('Like: erro ao verificar')
     }
 
     // Clica em reply
     console.log('Abrindo reply...')
     const replyButton = await page.$('[data-testid="reply"]')
-    if (replyButton) {
-      await replyButton.click()
-      await new Promise(r => setTimeout(r, 2000))
+    if (!replyButton) {
+      throw new Error('Botão de reply não encontrado')
     }
+    await replyButton.click()
+    await new Promise(r => setTimeout(r, 2000))
 
-    // Encontra o campo de texto
-    const textbox = await page.$('[data-testid="tweetTextarea_0"]')
+    // Aguarda campo de texto aparecer
+    const textbox = await page.waitForSelector('[data-testid="tweetTextarea_0"]', { timeout: 8000 })
     if (!textbox) {
-      throw new Error('Campo de texto não encontrado')
+      throw new Error('Campo de texto não apareceu')
     }
 
-    // Digita o reply
+    // Foca no campo e digita usando keyboard.type (FUNCIONA no X!)
     console.log(`Digitando: "${replyText}"`)
     await textbox.click()
     await new Promise(r => setTimeout(r, 500))
 
-    // Insere texto via DOM
-    await page.evaluate((text) => {
+    // Foca no contenteditable correto
+    await page.evaluate(() => {
       const el = document.querySelector('[data-testid="tweetTextarea_0"]')
+        || document.querySelector('[contenteditable="true"][role="textbox"]')
       if (el) {
         el.focus()
-        document.execCommand('insertText', false, text)
+        el.click()
       }
-    }, replyText)
+    })
+    await new Promise(r => setTimeout(r, 300))
 
+    // Digita usando keyboard.type (método que funciona!)
+    await page.keyboard.type(replyText, { delay: 50 })
     await new Promise(r => setTimeout(r, 1000))
 
-    // Clica em postar
-    const postButton = await page.$('[data-testid="tweetButton"]')
-    if (postButton) {
-      await postButton.click()
-      await new Promise(r => setTimeout(r, 3000))
-      console.log('✅ Reply postado!')
-      return true
+    // Clica em postar (tenta ambos seletores)
+    const postSelectors = ['[data-testid="tweetButtonInline"]', '[data-testid="tweetButton"]']
+    let posted = false
+
+    for (const sel of postSelectors) {
+      try {
+        const btn = await page.$(sel)
+        if (btn) {
+          await btn.click()
+          await new Promise(r => setTimeout(r, 3000))
+          console.log('✅ Reply postado!')
+          posted = true
+          break
+        }
+      } catch {}
     }
 
-    return false
+    if (!posted) {
+      throw new Error('Botão de postar não encontrado')
+    }
+
+    return true
 
   } catch (e) {
     console.error('Erro ao postar reply:', e.message)
