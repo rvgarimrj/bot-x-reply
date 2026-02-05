@@ -180,89 +180,60 @@ async function getBrowser() {
  * e não interferir tanto com o usuário
  */
 async function humanType(page, selector, text) {
-  await page.waitForSelector(selector, { timeout: 10000 })
+  // Prioriza textbox dentro de modal/dialog (reply modal do X)
+  const modalSelectors = [
+    '[role="dialog"] ' + selector,
+    '[aria-modal="true"] ' + selector,
+    selector
+  ]
 
-  // FECHA qualquer modal/popup que esteja aberto (ex: atalhos)
-  await page.keyboard.press('Escape')
-  await humanDelay({ min: 200, max: 300 })
-
-  // CLICA DIRETAMENTE no textbox do modal de reply
-  // Pega coordenadas do último textbox (reply modal)
-  const coords = await page.evaluate(() => {
-    const allTextboxes = document.querySelectorAll('[data-testid="tweetTextarea_0"], [contenteditable="true"][role="textbox"]')
-    if (allTextboxes.length > 0) {
-      const last = allTextboxes[allTextboxes.length - 1]
-      const rect = last.getBoundingClientRect()
-      // Verifica se está visível
-      if (rect.width > 0 && rect.height > 0) {
-        return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
-      }
-    }
-    return null
-  })
-
-  if (coords) {
-    console.log(`Clicando no textbox (coords: ${Math.round(coords.x)}, ${Math.round(coords.y)})...`)
-    // Clica duas vezes para garantir foco
-    await page.mouse.click(coords.x, coords.y)
-    await humanDelay({ min: 200, max: 300 })
-    await page.mouse.click(coords.x, coords.y)
-    await humanDelay({ min: 300, max: 500 })
-  } else {
-    // Fallback: tenta o seletor passado
-    console.log('Coords não encontradas, tentando seletor...')
+  let element = null
+  for (const sel of modalSelectors) {
     try {
-      await page.click(selector)
-      await humanDelay({ min: 300, max: 500 })
-    } catch (e) {
-      console.log(`Click no selector falhou: ${e.message}`)
-    }
+      element = await page.$(sel)
+      if (element) {
+        console.log(`Encontrado elemento: ${sel.slice(0, 50)}`)
+        break
+      }
+    } catch {}
   }
 
-  // Delay antes de digitar
-  await humanDelay({ min: 200, max: 400 })
+  if (!element) {
+    console.log('⚠️ Elemento de texto não encontrado')
+    return
+  }
 
-  // Usa keyboard.type com delay humanizado
+  // Clica para focar
+  await element.click()
+  await humanDelay({ min: 400, max: 600 })
+
+  // Digita usando element.type (mais confiável para contenteditable)
   const { min, max } = HUMAN_CONFIG.typingSpeed
   const charDelay = min + Math.floor(Math.random() * (max - min))
   console.log(`Digitando ${text.length} chars (delay: ${charDelay}ms/char)...`)
 
-  await page.keyboard.type(text, { delay: charDelay })
-
-  // Verifica se o texto foi inserido
-  const textInserted = await page.evaluate((expectedText) => {
-    const allTextboxes = document.querySelectorAll('[data-testid="tweetTextarea_0"], [contenteditable="true"][role="textbox"]')
-    for (const textbox of allTextboxes) {
-      const content = textbox.textContent?.trim() || ''
-      if (content.length > 0 && content.includes(expectedText.slice(0, 20))) {
-        return true
-      }
-    }
-    return false
-  }, text)
-
-  if (!textInserted) {
-    console.log('⚠️ Texto não detectado no campo, tentando método alternativo...')
-    // Método alternativo: triple-click para selecionar tudo, depois digita
-    const coords2 = await page.evaluate(() => {
-      const allTextboxes = document.querySelectorAll('[data-testid="tweetTextarea_0"], [contenteditable="true"][role="textbox"]')
-      if (allTextboxes.length > 0) {
-        const last = allTextboxes[allTextboxes.length - 1]
-        const rect = last.getBoundingClientRect()
-        return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
-      }
-      return null
-    })
-
-    if (coords2) {
-      await page.mouse.click(coords2.x, coords2.y, { clickCount: 3 }) // Triple click selects all
-      await humanDelay({ min: 200, max: 400 })
-      await page.keyboard.type(text, { delay: charDelay })
-    }
+  try {
+    await element.type(text, { delay: charDelay })
+  } catch (e) {
+    console.log(`element.type falhou: ${e.message}, tentando keyboard...`)
+    await page.keyboard.type(text, { delay: charDelay })
   }
 
-  // Delay depois
-  await humanDelay({ min: 400, max: 700 })
+  await humanDelay({ min: 300, max: 500 })
+
+  // Verifica se texto foi inserido (prioriza modal)
+  const content = await page.evaluate(() => {
+    let el = document.querySelector('[role="dialog"] [data-testid="tweetTextarea_0"]')
+    if (!el) el = document.querySelector('[aria-modal="true"] [data-testid="tweetTextarea_0"]')
+    if (!el) el = document.querySelector('[data-testid="tweetTextarea_0"]')
+    return el?.textContent?.trim() || ''
+  })
+
+  if (content.length > 0) {
+    console.log(`✅ Texto inserido: "${content.slice(0, 30)}..."`)
+  } else {
+    console.log('⚠️ Texto pode não ter sido inserido')
+  }
 }
 
 /**
@@ -508,24 +479,47 @@ export async function postReply(url, replyText) {
       throw new Error('Tweet com replies restritos (verificado via DOM)')
     }
 
-    // Clica no botão de reply
-    console.log('Clicando em reply...')
-    await humanClick(page, '[data-testid="reply"]')
+    // MÉTODO: Usa a área de reply INLINE (mais estável que modal)
+    // Clica na área "Postar sua resposta" para expandir
+    console.log('Clicando na área de reply inline...')
 
-    // Aguarda modal de reply abrir
-    await humanDelay(HUMAN_CONFIG.delays.afterClick)
+    // Primeiro tenta clicar diretamente no placeholder de reply
+    const inlineReplyClicked = await page.evaluate(() => {
+      // Procura a área de reply inline (não o botão de reply do tweet)
+      const replyArea = document.querySelector('[data-testid="tweetTextarea_0"]')
+        || document.querySelector('[placeholder*="resposta"]')
+        || document.querySelector('[placeholder*="reply"]')
+        || document.querySelector('[contenteditable="true"][role="textbox"]')
 
-    // Verifica se modal abriu corretamente
-    const modalOpened = await page.waitForSelector('[data-testid="tweetTextarea_0"], [contenteditable="true"][role="textbox"]', { timeout: 8000 }).catch(() => null)
-    if (!modalOpened) {
-      throw new Error('Modal de reply não abriu (possível restrição)')
+      if (replyArea) {
+        replyArea.click()
+        replyArea.focus()
+        return true
+      }
+      return false
+    })
+
+    if (!inlineReplyClicked) {
+      // Se não achou inline, clica no botão de reply para abrir modal
+      console.log('Área inline não encontrada, tentando botão de reply...')
+      await humanClick(page, '[data-testid="reply"]')
     }
 
-    // Encontra o campo de texto do reply
+    // Aguarda o campo de texto ficar disponível
+    await humanDelay(HUMAN_CONFIG.delays.afterClick)
+
+    const textboxReady = await page.waitForSelector('[data-testid="tweetTextarea_0"], [contenteditable="true"][role="textbox"]', { timeout: 8000 }).catch(() => null)
+    if (!textboxReady) {
+      throw new Error('Campo de reply não ficou disponível')
+    }
+
+    // Aguarda estabilizar
+    await humanDelay({ min: 500, max: 800 })
+
+    // Encontra o campo de texto
     const replySelectors = [
       '[data-testid="tweetTextarea_0"]',
-      '[contenteditable="true"][role="textbox"]',
-      'div[data-contents="true"]'
+      '[contenteditable="true"][role="textbox"]'
     ]
 
     let typed = false
