@@ -109,11 +109,15 @@ curl -s http://127.0.0.1:9222/json/version | head -1
 
 | Horário | Script | Função |
 |---------|--------|--------|
-| */15 8-23 | reply-to-reply.js | Responde interações |
-| 14:00 | collect-metrics.js | Coleta likes |
-| 22:00 | collect-metrics.js | Segunda coleta |
+| :07/:22/:37/:52 8-23h | reply-to-reply.js | Responde interações |
+| 14:07 | collect-metrics.js | Coleta likes |
+| 22:07 | collect-metrics.js | Segunda coleta |
 | 23:00 | analyze-and-learn.js | Gera insights |
+| 23:30 | daily-optimizer.js | Ajustes automáticos |
+| 23:59 | nightly-analytics.js | Métricas X Analytics |
 | 00:05 | daily-report.js | Relatório + Telegram |
+
+**IMPORTANTE**: Evitar minuto :00 nos crontabs - posts são agendados nos horários cheios.
 
 ---
 
@@ -185,7 +189,8 @@ cat data/knowledge.json | jq '.replies | length'
 | Múltiplos daemons | `pkill -9 -f auto-daemon` |
 | Resumo errado | `getDailyStats()` lê de knowledge.json |
 | "JavaScript world" error | Usar `page.evaluate()` (fix 2026-02-05) |
-| "Frame detached" error | Proteger página atual no `closeExcessTabs` |
+| "Frame detached" error | maxTabs=6, dialog handler, retry (fix 2026-02-05) |
+| "Execution context destroyed" | Conflito daemon/R2R - maxTabs=6 resolve |
 | Reply vai p/ tweet errado | Encontrar tweet focado, não 1º da página |
 | Verificação falso positivo | SEMPRE recarregar e buscar reply na thread |
 | "Sair do site?" modal | Handler de dialog no Puppeteer (fix 2026-02-05) |
@@ -250,6 +255,20 @@ cat data/knowledge.json | jq '.replies | length'
 **Solução em `scripts/reply-to-reply.js`:**
 - Chave agora é apenas `person_username`
 - Limita 2 replies por PESSOA total, não por tweet
+
+### Problema 6: Daemon fecha abas do R2R (e vice-versa)
+
+**Causa:** Ambos compartilham o mesmo Chrome. `closeExcessTabs(browser, 3)` fechava abas de outro processo.
+
+**Soluções:**
+1. `maxTabs` aumentado de 3 para 6 em todos os `closeExcessTabs`
+2. `extractTweet` e `checkLogin`: criam página ANTES de fechar abas (protege a atual)
+3. R2R: dialog handler em todas as páginas (notifications + thread context)
+4. R2R: try/catch no scroll loop (degrada graciosamente se frame detach)
+5. R2R: retry (2 tentativas) no post de replies
+6. Crontab: R2R nos minutos :07/:22/:37/:52 (evita conflito com posts agendados nos :00)
+
+**Commit:** `7bc4927` - fix: R2R frame detached + daemon tab conflict
 
 ---
 
