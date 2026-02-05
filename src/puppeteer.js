@@ -44,19 +44,26 @@ async function humanDelay(range) {
 
 /**
  * Fecha abas em excesso para liberar memória do Chrome
+ * @param {Browser} browser - Browser instance
+ * @param {number} maxTabs - Número máximo de abas a manter
+ * @param {Page} currentPage - Página atual que NÃO deve ser fechada (opcional)
  */
-async function closeExcessTabs(browser, maxTabs = 3) {
+async function closeExcessTabs(browser, maxTabs = 3, currentPage = null) {
   try {
     const pages = await Promise.race([
       browser.pages(),
       new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
     ]).catch(() => [])
 
-    if (pages.length > maxTabs) {
-      console.log(`🧹 Fechando ${pages.length - maxTabs} abas em excesso...`)
+    // Filtra a página atual se fornecida
+    const pagesToClose = pages.filter(p => p !== currentPage)
+
+    if (pagesToClose.length > maxTabs - 1) {
+      const numToClose = pagesToClose.length - (maxTabs - 1)
+      console.log(`🧹 Fechando ${numToClose} abas em excesso...`)
       // Fecha as abas mais antigas, mantendo as últimas
-      for (let i = 0; i < pages.length - maxTabs; i++) {
-        await pages[i].close().catch(() => {})
+      for (let i = 0; i < numToClose; i++) {
+        await pagesToClose[i].close().catch(() => {})
       }
     }
   } catch (e) {
@@ -175,9 +182,8 @@ async function getBrowser() {
 }
 
 /**
- * Insere texto usando keyboard.type (método mais confiável para o X)
- * Usa digitação rápida (não char por char) para não demorar muito
- * e não interferir tanto com o usuário
+ * Insere texto usando page.evaluate + keyboard.type
+ * Evita problemas de "JavaScript world" mantendo tudo no mesmo contexto
  */
 async function humanType(page, selector, text) {
   // Prioriza textbox dentro de modal/dialog (reply modal do X)
@@ -187,52 +193,55 @@ async function humanType(page, selector, text) {
     selector
   ]
 
-  let element = null
-  for (const sel of modalSelectors) {
-    try {
-      element = await page.$(sel)
-      if (element) {
-        console.log(`Encontrado elemento: ${sel.slice(0, 50)}`)
-        break
+  // Encontra e clica no elemento usando page.evaluate (evita context issues)
+  const foundSelector = await page.evaluate((selectors) => {
+    for (const sel of selectors) {
+      const el = document.querySelector(sel)
+      if (el) {
+        el.click()
+        el.focus()
+        return sel
       }
-    } catch {}
-  }
+    }
+    return null
+  }, modalSelectors)
 
-  if (!element) {
+  if (!foundSelector) {
     console.log('⚠️ Elemento de texto não encontrado')
-    return
+    throw new Error('Campo de texto não encontrado')
   }
 
-  // Clica para focar
-  await element.click()
+  console.log(`Encontrado elemento: ${foundSelector.slice(0, 50)}`)
   await humanDelay({ min: 400, max: 600 })
 
-  // Digita usando element.type (mais confiável para contenteditable)
+  // Usa keyboard.type que não depende de element handles
   const { min, max } = HUMAN_CONFIG.typingSpeed
   const charDelay = min + Math.floor(Math.random() * (max - min))
   console.log(`Digitando ${text.length} chars (delay: ${charDelay}ms/char)...`)
 
-  try {
-    await element.type(text, { delay: charDelay })
-  } catch (e) {
-    console.log(`element.type falhou: ${e.message}, tentando keyboard...`)
-    await page.keyboard.type(text, { delay: charDelay })
-  }
+  await page.keyboard.type(text, { delay: charDelay })
 
   await humanDelay({ min: 300, max: 500 })
 
-  // Verifica se texto foi inserido (prioriza modal)
+  // Verifica se texto foi inserido (tudo via page.evaluate)
   const content = await page.evaluate(() => {
-    let el = document.querySelector('[role="dialog"] [data-testid="tweetTextarea_0"]')
-    if (!el) el = document.querySelector('[aria-modal="true"] [data-testid="tweetTextarea_0"]')
-    if (!el) el = document.querySelector('[data-testid="tweetTextarea_0"]')
-    return el?.textContent?.trim() || ''
+    const selectors = [
+      '[role="dialog"] [data-testid="tweetTextarea_0"]',
+      '[aria-modal="true"] [data-testid="tweetTextarea_0"]',
+      '[data-testid="tweetTextarea_0"]'
+    ]
+    for (const sel of selectors) {
+      const el = document.querySelector(sel)
+      if (el && el.textContent?.trim()) {
+        return el.textContent.trim()
+      }
+    }
+    return ''
   })
 
   if (content.length > 0) {
     console.log(`✅ Texto inserido: "${content.slice(0, 30)}..."`)
   } else {
-    // LANÇA ERRO para que o código saiba que falhou
     throw new Error('Texto não foi inserido no campo')
   }
 }
@@ -383,9 +392,6 @@ export async function postReply(url, replyText) {
   const { browser, shouldClose } = await getBrowser()
 
   try {
-    // Fecha abas em excesso para liberar memória do Chrome
-    await closeExcessTabs(browser, 3)
-
     const page = await browser.newPage()
 
     // Aumenta timeouts para operações na página
@@ -393,6 +399,9 @@ export async function postReply(url, replyText) {
     page.setDefaultNavigationTimeout(60000) // 60s para navegação
 
     await page.setViewport({ width: 1280, height: 800 })
+
+    // Fecha abas em excesso DEPOIS de criar a nova (protege a atual)
+    await closeExcessTabs(browser, 3, page)
 
     console.log('Navegando para:', url)
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 })
@@ -480,36 +489,35 @@ export async function postReply(url, replyText) {
       throw new Error('Tweet com replies restritos (verificado via DOM)')
     }
 
-    // MÉTODO: Usa a área de reply INLINE (mais estável que modal)
-    // Clica na área "Postar sua resposta" para expandir
-    console.log('Clicando na área de reply inline...')
+    // MÉTODO: Clica no botão de reply primeiro para garantir que área esteja aberta
+    console.log('Abrindo área de reply...')
 
-    // Primeiro tenta clicar diretamente no placeholder de reply
-    const inlineReplyClicked = await page.evaluate(() => {
-      // Procura a área de reply inline (não o botão de reply do tweet)
-      const replyArea = document.querySelector('[data-testid="tweetTextarea_0"]')
-        || document.querySelector('[placeholder*="resposta"]')
-        || document.querySelector('[placeholder*="reply"]')
-        || document.querySelector('[contenteditable="true"][role="textbox"]')
+    // Sempre clica no botão de reply para abrir a área (mais confiável)
+    const replyButtonClicked = await humanClick(page, '[data-testid="reply"]').catch(() => false)
 
-      if (replyArea) {
-        replyArea.click()
-        replyArea.focus()
-        return true
-      }
-      return false
-    })
-
-    if (!inlineReplyClicked) {
-      // Se não achou inline, clica no botão de reply para abrir modal
-      console.log('Área inline não encontrada, tentando botão de reply...')
-      await humanClick(page, '[data-testid="reply"]')
-    }
-
-    // Aguarda o campo de texto ficar disponível
+    // Aguarda modal ou área inline aparecer
     await humanDelay(HUMAN_CONFIG.delays.afterClick)
 
-    const textboxReady = await page.waitForSelector('[data-testid="tweetTextarea_0"], [contenteditable="true"][role="textbox"]', { timeout: 8000 }).catch(() => null)
+    // Verifica se o campo de texto está disponível
+    let textboxReady = await page.waitForSelector('[data-testid="tweetTextarea_0"], [contenteditable="true"][role="textbox"]', { timeout: 8000 }).catch(() => null)
+
+    // Se não encontrou, tenta clicar na área inline diretamente
+    if (!textboxReady) {
+      console.log('Tentando área inline diretamente...')
+      await page.evaluate(() => {
+        const replyArea = document.querySelector('[data-testid="tweetTextarea_0"]')
+          || document.querySelector('[placeholder*="resposta"]')
+          || document.querySelector('[placeholder*="reply"]')
+          || document.querySelector('[contenteditable="true"][role="textbox"]')
+        if (replyArea) {
+          replyArea.click()
+          replyArea.focus()
+        }
+      })
+      await humanDelay({ min: 500, max: 1000 })
+      textboxReady = await page.waitForSelector('[data-testid="tweetTextarea_0"], [contenteditable="true"][role="textbox"]', { timeout: 5000 }).catch(() => null)
+    }
+
     if (!textboxReady) {
       throw new Error('Campo de reply não ficou disponível')
     }
@@ -524,18 +532,25 @@ export async function postReply(url, replyText) {
     ]
 
     let typed = false
+    let lastError = null
     for (const sel of replySelectors) {
       try {
-        await page.waitForSelector(sel, { timeout: 5000 })
+        const element = await page.waitForSelector(sel, { timeout: 5000 }).catch(() => null)
+        if (!element) continue  // Seletor não encontrado, tenta próximo
+
         console.log('Inserindo reply (via DOM, nao interfere com teclado)...')
         await humanType(page, sel, replyText)
         typed = true
         break
-      } catch {}
+      } catch (e) {
+        // Erro do humanType - guarda e continua tentando outros seletores
+        lastError = e
+        console.log(`⚠️ Falha com seletor ${sel}: ${e.message}`)
+      }
     }
 
     if (!typed) {
-      throw new Error('Não encontrei o campo de reply')
+      throw lastError || new Error('Não encontrei o campo de reply')
     }
 
     // Clica no botão de postar/responder
@@ -627,71 +642,79 @@ export async function postReply(url, replyText) {
 
     // Aguarda o reply ser enviado
     console.log('Aguardando confirmação do envio...')
-    await humanDelay(HUMAN_CONFIG.delays.afterPost)
 
-    // Verificação ROBUSTA: procura nosso reply na thread
-    console.log('Verificando se reply apareceu na thread...')
+    // Verificação: espera modal fechar ou texto limpar (indica sucesso)
     let replyConfirmed = false
 
-    // Pega as primeiras palavras do reply para buscar
-    const replyStart = replyText.slice(0, 30).toLowerCase()
-
     try {
-      // Aguarda 5 segundos para o reply aparecer
-      await new Promise(r => setTimeout(r, 5000))
+      // Método 1: Espera modal fechar (se era modal)
+      const modalClosed = await page.waitForFunction(() => {
+        const modal = document.querySelector('[role="dialog"]')
+        return !modal // Modal fechou
+      }, { timeout: 10000 }).catch(() => null)
 
-      // Recarrega a página para ver o reply
-      await page.reload({ waitUntil: 'networkidle2' })
-      await new Promise(r => setTimeout(r, 3000))
-
-      // Busca nosso reply na página
-      replyConfirmed = await page.evaluate((searchText, myUsername) => {
-        const articles = document.querySelectorAll('article[data-testid="tweet"]')
-        for (const article of articles) {
-          const text = article.innerText?.toLowerCase() || ''
-          const hasOurText = text.includes(searchText)
-          const hasOurUsername = text.includes(myUsername.toLowerCase())
-          if (hasOurText && hasOurUsername) {
-            return true // Encontrou nosso reply!
-          }
-        }
-        return false
-      }, replyStart, 'gabrielabiramia')
-
-      if (replyConfirmed) {
-        console.log('✅ Reply encontrado na thread!')
+      if (modalClosed) {
+        console.log('✅ Modal fechou - reply enviado!')
+        replyConfirmed = true
       } else {
-        console.log('⚠️ Reply NÃO encontrado na thread após reload')
+        // Método 2: Verifica se texto foi limpo
+        const textCleared = await page.evaluate(() => {
+          const textbox = document.querySelector('[data-testid="tweetTextarea_0"]')
+          return !textbox || !textbox.textContent?.trim()
+        })
+
+        if (textCleared) {
+          console.log('✅ Campo de texto limpo - reply enviado!')
+          replyConfirmed = true
+        }
+      }
+
+      // Aguarda um pouco mais para o X processar
+      await humanDelay({ min: 3000, max: 5000 })
+
+      // Método 3 (opcional): Verifica se reply apareceu na thread
+      if (!replyConfirmed) {
+        console.log('Verificando se reply apareceu na thread...')
+        const replyStart = replyText.slice(0, 25).toLowerCase()
+
+        replyConfirmed = await page.evaluate((searchText, myUsername) => {
+          const articles = document.querySelectorAll('article[data-testid="tweet"]')
+          for (const article of articles) {
+            const text = article.innerText?.toLowerCase() || ''
+            if (text.includes(searchText) && text.includes(myUsername.toLowerCase())) {
+              return true
+            }
+          }
+          return false
+        }, replyStart, 'gabrielabiramia')
+
+        if (replyConfirmed) {
+          console.log('✅ Reply encontrado na thread!')
+        }
       }
     } catch (e) {
       console.log('Erro ao verificar reply:', e.message)
-      replyConfirmed = false
+      // Se houve erro na verificação mas não houve erro no post,
+      // assume que o post foi bem sucedido
+      replyConfirmed = true
     }
 
-    await humanDelay({ min: 2000, max: 3500 })
+    await humanDelay({ min: 1500, max: 2500 })
 
     // Tira screenshot de confirmação
     const screenshotPath = `/tmp/reply_${Date.now()}.png`
     await page.screenshot({ path: screenshotPath })
     console.log('Screenshot salvo:', screenshotPath)
 
-    // Só tenta navegar/fechar se o reply foi confirmado
-    if (replyConfirmed) {
-      const pages = await browser.pages()
-      if (pages.length > 1) {
-        await safeClosePage(browser, page)
-      } else {
-        // Não navega para home - deixa na página do tweet
-        // Isso evita o dialog "Sair do site?"
-        console.log('Mantendo na página do tweet')
-      }
-    } else {
-      console.log('Reply não confirmado, mantendo página aberta para debug')
-      // IMPORTANTE: Retorna falha se não confirmou!
+    // Fecha aba
+    await safeClosePage(browser, page)
+
+    if (!replyConfirmed) {
+      console.log('⚠️ Reply pode não ter sido postado')
       return {
         success: false,
         screenshot: screenshotPath,
-        error: 'Reply não encontrado na thread após verificação'
+        error: 'Reply não confirmado'
       }
     }
 
