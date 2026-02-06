@@ -407,13 +407,23 @@ export async function postReply(url, replyText) {
 
     await page.setViewport({ width: 1280, height: 800 })
 
-    // Fecha abas em excesso DEPOIS de criar a nova (protege a atual)
-    // maxTabs=6 para não fechar abas de outros processos (R2R, etc)
-    await closeExcessTabs(browser, 6, page)
+    // Fecha TODAS as outras abas antes de postar (evita reply ir pra aba errada)
+    await closeExcessTabs(browser, 2, page)
 
     console.log('Navegando para:', url)
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 })
     await humanDelay(HUMAN_CONFIG.delays.pageLoad)
+
+    // Extrai tweet ID da URL alvo
+    const targetTweetId = url.split('/status/')[1]?.split(/[?#]/)[0]
+
+    // VERIFICAÇÃO: Confirma que estamos na página certa
+    const currentUrl = page.url()
+    if (targetTweetId && !currentUrl.includes(targetTweetId)) {
+      console.log(`❌ URL errada! Esperava tweet ${targetTweetId}, estou em: ${currentUrl}`)
+      await safeClosePage(browser, page)
+      return { success: false, error: 'wrong_page' }
+    }
 
     // Verifica se replies estão restritos ("Quem pode responder?" / "Who can reply?")
     const isRestricted = await page.evaluate(() => {
@@ -644,6 +654,14 @@ export async function postReply(url, replyText) {
       '[data-testid="tweetTextarea_0"]',
       '[contenteditable="true"][role="textbox"]'
     ]
+
+    // VERIFICAÇÃO PRÉ-DIGITAÇÃO: Ainda estamos na página certa?
+    const preTypeUrl = page.url()
+    if (targetTweetId && !preTypeUrl.includes(targetTweetId)) {
+      console.log(`❌ Página mudou antes de digitar! Estou em: ${preTypeUrl}`)
+      await safeClosePage(browser, page)
+      return { success: false, error: 'page_changed' }
+    }
 
     let typed = false
     let lastError = null
