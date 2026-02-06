@@ -65,12 +65,13 @@ Sistema de engajamento automatizado no X (Twitter).
 # Status
 pgrep -f "auto-daemon" && echo "OK"
 
-# Iniciar
-nohup node scripts/auto-daemon.js >> logs/auto-daemon.log 2>&1 &
+# Iniciar (com auto-restart em caso de crash)
+nohup ./scripts/start-daemon.sh >> logs/auto-daemon.log 2>&1 &
 
-# Parar
+# Parar (SIGINT = encerramento limpo, NÃO reinicia)
 pkill -2 -f "auto-daemon.js"
 ```
+**NUNCA usar `nohup node ...`** - usar sempre o wrapper `start-daemon.sh` que garante PATH e auto-restart.
 
 ### 2. Reply-to-Reply (responde quem interage)
 ```bash
