@@ -20,6 +20,7 @@ import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import puppeteer from 'puppeteer-core'
 import { postReply as daemonPostReply } from '../src/puppeteer.js'
+import { fixYear } from '../src/claude.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = join(__dirname, '..', 'data')
@@ -396,6 +397,9 @@ Responda APENAS com o texto do reply (sem aspas, sem explicação):`
 
     // Remove aspas se houver
     reply = reply.replace(/^["']|["']$/g, '')
+
+    // Corrige anos errados (knowledge cutoff do Claude)
+    reply = fixYear(reply)
 
     // Garante que não é muito longo
     if (reply.length > 60) {

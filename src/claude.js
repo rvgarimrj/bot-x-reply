@@ -383,6 +383,20 @@ Apenas as 3 opções numeradas:`
 }
 
 /**
+ * Corrige anos errados em texto gerado pelo Claude (knowledge cutoff)
+ * Substitui anos recentes incorretos pelo ano atual
+ */
+export function fixYear(text) {
+  const currentYear = new Date().getFullYear()
+  // Substitui anos de 2023 até (currentYear-1) pelo ano correto
+  // Só quando parece ser referência ao "agora" (não datas históricas)
+  for (let y = currentYear - 1; y >= 2023; y--) {
+    text = text.replace(new RegExp(`\\b${y}\\b`, 'g'), String(currentYear))
+  }
+  return text
+}
+
+/**
  * Parseia as 3 opções de reply do texto
  */
 function parseReplies(text) {
@@ -394,6 +408,7 @@ function parseReplies(text) {
     if (match) {
       let reply = match[2].trim()
       reply = reply.replace(/^["']|["']$/g, '')
+      reply = fixYear(reply)
       replies.push(reply)
     }
   }
