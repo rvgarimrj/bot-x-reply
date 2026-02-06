@@ -118,7 +118,10 @@ curl -s http://127.0.0.1:9222/json/version | head -1
 | 23:59 | nightly-analytics.js | Métricas X Analytics |
 | 00:05 | daily-report.js | Relatório + Telegram |
 
-**IMPORTANTE**: Evitar minuto :00 nos crontabs - posts são agendados nos horários cheios.
+**IMPORTANTE**: Evitar minuto :00 nos crontabs - outro robô posta nos horários cheios.
+- Daemon: evita automaticamente minutos 57-02 (±3min do :00)
+- R2R: roda nos :07/:22/:37/:52
+- Crontabs: nunca usar minuto :00
 
 ---
 
@@ -206,6 +209,9 @@ cat data/knowledge.json | jq '.replies | length'
 | R2R loop em bloqueado | Marca como processado mesmo em falha (fix 2026-02-06) |
 | Ano errado nos replies | `fixYear()` corrige 2023-2025→2026 antes de postar (fix 2026-02-06) |
 | Múltiplos daemons após restart | Matar wrapper E node: `pkill -9 -f start-daemon; pkill -9 -f auto-daemon` |
+| Reply postado na aba errada | Fecha todas abas antes de postar + verifica URL (fix 2026-02-06) |
+| Reply em inglês pra tweet PT | Prompt reforçado + validação pós-geração `detectLanguage()` (fix 2026-02-06) |
+| Conflito horário c/ robô posts | Daemon evita ±3min de todos :00, R2R nos :07/:22/:37/:52 (fix 2026-02-06) |
 
 ---
 
