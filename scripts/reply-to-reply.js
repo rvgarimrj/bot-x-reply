@@ -495,8 +495,10 @@ async function processReply(browser, notification, dryRun = false) {
   // Posta
   const success = await likeAndReply(browser, notification.tweetUrl, response)
 
+  // Sempre marca como processado para evitar loop em bloqueios/erros permanentes
+  state.repliedTo.add(notification.tweetId)
+
   if (success) {
-    state.repliedTo.add(notification.tweetId)
     const newCount = incrementPersonReplyCount(notification.author, notification.tweetUrl)
     saveState()
     console.log(`✅ Sucesso! (reply ${newCount}/${CONFIG.maxRepliesPerThread} para @${notification.author})`)
@@ -504,6 +506,9 @@ async function processReply(browser, notification, dryRun = false) {
     if (newCount >= CONFIG.maxRepliesPerThread) {
       console.log(`⚠️ Limite atingido com @${notification.author} - você assume essa conversa!`)
     }
+  } else {
+    saveState()
+    console.log(`⏭️ Marcado como processado (não vai re-tentar)`)
   }
 
   return success
