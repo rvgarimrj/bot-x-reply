@@ -420,9 +420,12 @@ export async function postReply(url, replyText) {
     // VERIFICAÇÃO: Confirma que estamos na página certa
     const currentUrl = page.url()
     if (targetTweetId && !currentUrl.includes(targetTweetId)) {
-      console.log(`❌ URL errada! Esperava tweet ${targetTweetId}, estou em: ${currentUrl}`)
-      await safeClosePage(browser, page)
-      return { success: false, error: 'wrong_page' }
+      // Compose page é aceitável se vier de redirect (reply flow alternativo)
+      if (!currentUrl.includes('/compose/')) {
+        console.log(`❌ URL errada! Esperava tweet ${targetTweetId}, estou em: ${currentUrl}`)
+        await safeClosePage(browser, page)
+        return { success: false, error: 'wrong_page' }
+      }
     }
 
     // Verifica se replies estão restritos ("Quem pode responder?" / "Who can reply?")
@@ -657,10 +660,15 @@ export async function postReply(url, replyText) {
 
     // VERIFICAÇÃO PRÉ-DIGITAÇÃO: Ainda estamos na página certa?
     const preTypeUrl = page.url()
-    if (targetTweetId && !preTypeUrl.includes(targetTweetId)) {
+    const isOnTweet = preTypeUrl.includes(targetTweetId)
+    const isOnCompose = preTypeUrl.includes('/compose/post') || preTypeUrl.includes('/compose/tweet')
+    if (targetTweetId && !isOnTweet && !isOnCompose) {
       console.log(`❌ Página mudou antes de digitar! Estou em: ${preTypeUrl}`)
       await safeClosePage(browser, page)
       return { success: false, error: 'page_changed' }
+    }
+    if (isOnCompose) {
+      console.log('📝 Compose page detectada (reply flow alternativo do X)')
     }
 
     let typed = false
@@ -775,27 +783,45 @@ export async function postReply(url, replyText) {
     // Aguarda o reply ser enviado
     console.log('Aguardando confirmação do envio...')
 
-    // Espera modal fechar primeiro
-    const modalClosed = await page.waitForFunction(() => {
-      const modal = document.querySelector('[role="dialog"]')
-      return !modal
-    }, { timeout: 10000 }).catch(() => null)
+    // Na compose page, espera a URL mudar (X redireciona após post)
+    // No modal inline, espera o modal fechar
+    const afterPostUrl = page.url()
+    if (afterPostUrl.includes('/compose/')) {
+      // Compose page: espera redirecionar ou toast de confirmação
+      await page.waitForFunction(() => {
+        return !window.location.href.includes('/compose/')
+          || document.querySelector('[data-testid="toast"]')
+      }, { timeout: 10000 }).catch(() => null)
+      console.log('Compose page: aguardando processamento...')
+    } else {
+      // Modal inline: espera modal fechar
+      const modalClosed = await page.waitForFunction(() => {
+        const modal = document.querySelector('[role="dialog"]')
+        return !modal
+      }, { timeout: 10000 }).catch(() => null)
 
-    if (modalClosed) {
-      console.log('Modal fechou, verificando se reply foi postado...')
+      if (modalClosed) {
+        console.log('Modal fechou, verificando se reply foi postado...')
+      }
     }
 
     // Aguarda o X processar
     await humanDelay({ min: 4000, max: 6000 })
 
-    // VERIFICAÇÃO OBRIGATÓRIA: Recarrega e busca nosso reply na thread
+    // VERIFICAÇÃO OBRIGATÓRIA: Navega ao tweet e busca nosso reply na thread
     let replyConfirmed = false
     const replyStart = replyText.slice(0, 20).toLowerCase()
 
     try {
-      // Recarrega a página para ver o reply
-      console.log('Recarregando página para verificar...')
-      await page.reload({ waitUntil: 'networkidle2', timeout: 15000 })
+      // Se estamos na compose page, navega de volta ao tweet original
+      const postUrl = page.url()
+      if (postUrl.includes('/compose/')) {
+        console.log('Navegando de volta ao tweet para verificar...')
+        await page.goto(url, { waitUntil: 'networkidle2', timeout: 15000 })
+      } else {
+        console.log('Recarregando página para verificar...')
+        await page.reload({ waitUntil: 'networkidle2', timeout: 15000 })
+      }
       await humanDelay({ min: 2000, max: 3000 })
 
       // Busca nosso reply na thread
