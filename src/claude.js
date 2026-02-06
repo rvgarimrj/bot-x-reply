@@ -311,8 +311,8 @@ export async function generateReplies(tweetText, tweetAuthor, context = {}) {
   }
 
   const languageInstruction = {
-    pt: 'Responda em PORTUGUÊS BRASILEIRO',
-    es: 'Responda en ESPAÑOL',
+    pt: '⚠️ OBRIGATÓRIO: Responda em PORTUGUÊS BRASILEIRO. NÃO use inglês. Escreva como brasileiro.',
+    es: '⚠️ OBLIGATORIO: Responda en ESPAÑOL. NO use inglés.',
     en: 'Reply in ENGLISH'
   }[langInfo.language] || 'Reply in the same language as the tweet'
 
@@ -349,7 +349,8 @@ IMPORTANTE:
 - Pelo menos 1 DEVE ter pergunta (?)
 - NÃO dê informação, NÃO ensine, NÃO analise
 - Pareça curioso, não expert
-
+${langInfo.language === 'pt' ? '- TODOS os 3 replies DEVEM ser em PORTUGUÊS. Proibido inglês.' : ''}
+${langInfo.language === 'es' ? '- TODOS los 3 replies DEBEN ser en ESPAÑOL. Prohibido inglés.' : ''}
 Apenas as 3 opções numeradas:`
 
   try {
@@ -361,7 +362,20 @@ Apenas as 3 opções numeradas:`
     })
 
     const content = response.content[0].text
-    const replies = parseReplies(content)
+    let replies = parseReplies(content)
+
+    // Validação: se tweet é PT/ES mas reply saiu em inglês, filtra
+    if (langInfo.language !== 'en' && replies.length > 0) {
+      const filtered = replies.filter(r => {
+        const replyLang = detectLanguage(r)
+        return replyLang.language === langInfo.language || replyLang.confidence === 'low'
+      })
+      if (filtered.length > 0) {
+        replies = filtered
+      } else {
+        console.warn(`⚠️ Todos os replies saíram em idioma errado (esperado: ${langInfo.language}), usando mesmo assim`)
+      }
+    }
 
     return {
       success: true,
