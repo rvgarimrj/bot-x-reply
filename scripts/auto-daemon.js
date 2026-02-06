@@ -166,26 +166,18 @@ function isOperatingHours() {
 
 /**
  * Verifica se estamos em horario de conflito com outro robo
- * Evita 5 minutos antes e depois de cada horario configurado
+ * Evita TODOS os horarios redondos (:00) ±3 minutos
+ * (outro robô posta nos minutos :00 de cada hora)
  */
 function isConflictTime() {
   const now = new Date()
-  const hour = now.getHours()
   const minute = now.getMinutes()
-  const buffer = CONFIG.avoidMinuteBuffer
+  const hour = now.getHours()
 
-  for (const avoidHour of CONFIG.avoidHours) {
-    // Horario exato (ex: 8:00)
-    if (hour === avoidHour && minute < buffer) {
-      return { conflict: true, reason: `${avoidHour}h +${minute}min`, waitMinutes: buffer - minute }
-    }
-
-    // Antes do horario (ex: 7:55-7:59 para evitar 8:00)
-    const hourBefore = avoidHour === 0 ? 23 : avoidHour - 1
-    if (hour === hourBefore && minute >= (60 - buffer)) {
-      const waitMinutes = (60 - minute) + buffer
-      return { conflict: true, reason: `proximo de ${avoidHour}h`, waitMinutes }
-    }
+  // Evita minutos 57-59 e 00-02 (±3 min do :00)
+  if (minute >= 57 || minute <= 2) {
+    const waitMinutes = minute >= 57 ? (60 - minute) + 3 : 3 - minute
+    return { conflict: true, reason: `horário redondo ${hour}:00`, waitMinutes }
   }
 
   return { conflict: false }
