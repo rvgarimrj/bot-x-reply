@@ -45,7 +45,15 @@ const SEARCH_KEYWORDS = [
 
   // Vibe Coding
   '"cursor" "coding" min_faves:50',
-  '"vibe coding" min_faves:30'
+  '"vibe coding" min_faves:30',
+
+  // Small creators (high reply probability)
+  '"just launched" min_faves:10',
+  '"built this with" min_faves:5',
+  '"side project" min_faves:10',
+  '"my first" "app" min_faves:5',
+  '"feedback" "launched" min_faves:10',
+  '"indie hacker" min_faves:20'
 ]
 
 /**
@@ -53,43 +61,55 @@ const SEARCH_KEYWORDS = [
  * 30 contas iniciais, 3 verificadas por ciclo
  */
 const MONITOR_ACCOUNTS = [
-  // AI/Tech Leaders (8)
-  { username: 'sama', niche: 'AI', priority: 'high' },
-  { username: 'karpathy', niche: 'AI', priority: 'high' },
-  { username: 'ylecun', niche: 'AI', priority: 'high' },
-  { username: 'elonmusk', niche: 'tech', priority: 'medium' },
-  { username: 'satyanadella', niche: 'tech', priority: 'medium' },
-  { username: 'emaborgs', niche: 'AI', priority: 'medium' },
-  { username: 'AndrewYNg', niche: 'AI', priority: 'medium' },
-  { username: 'demaborgs', niche: 'AI', priority: 'medium' },
+  // AI/Tech Leaders - DEMOTED (mega-contas, nunca respondem)
+  { username: 'sama', niche: 'AI', priority: 'low' },
+  { username: 'karpathy', niche: 'AI', priority: 'low' },
+  { username: 'ylecun', niche: 'AI', priority: 'low' },
+  { username: 'elonmusk', niche: 'tech', priority: 'low' },
+  { username: 'satyanadella', niche: 'tech', priority: 'low' },
+  { username: 'emaborgs', niche: 'AI', priority: 'low' },
+  { username: 'AndrewYNg', niche: 'AI', priority: 'low' },
+  { username: 'demaborgs', niche: 'AI', priority: 'low' },
 
-  // Startups/VCs (6)
-  { username: 'paulg', niche: 'startups', priority: 'high' },
-  { username: 'naval', niche: 'philosophy', priority: 'high' },
-  { username: 'balajis', niche: 'tech', priority: 'high' },
+  // Startups/VCs - DEMOTED mega, kept mid
+  { username: 'paulg', niche: 'startups', priority: 'low' },
+  { username: 'naval', niche: 'philosophy', priority: 'low' },
+  { username: 'balajis', niche: 'tech', priority: 'medium' },
   { username: 'garrytan', niche: 'VC', priority: 'medium' },
   { username: 'jason', niche: 'VC', priority: 'medium' },
   { username: 'rrhoover', niche: 'product', priority: 'medium' },
 
-  // Crypto/Finance (8)
-  { username: 'TaviCosta', niche: 'macro', priority: 'high' },
+  // Crypto/Finance
+  { username: 'TaviCosta', niche: 'macro', priority: 'medium' },
   { username: 'Investanswers', niche: 'crypto', priority: 'medium' },
   { username: 'DocumentingBTC', niche: 'crypto', priority: 'medium' },
   { username: 'intocryptoverse', niche: 'crypto', priority: 'medium' },
-  { username: 'APompliano', niche: 'crypto', priority: 'medium' },
+  { username: 'APompliano', niche: 'crypto', priority: 'low' },
   { username: 'TheBlock__', niche: 'crypto', priority: 'low' },
   { username: 'zaborgs', niche: 'defi', priority: 'low' },
   { username: 'coaborgs', niche: 'trading', priority: 'low' },
 
-  // Indie Hackers/Vibe Coders (8)
-  { username: 'levelsio', niche: 'indie', priority: 'high' },
+  // Indie Hackers/Vibe Coders (existentes)
+  { username: 'levelsio', niche: 'indie', priority: 'medium' },
   { username: 'marc_loub', niche: 'indie', priority: 'high' },
-  { username: 'tdinh_me', niche: 'indie', priority: 'medium' },
-  { username: 'dannypostmaa', niche: 'indie', priority: 'medium' },
+  { username: 'tdinh_me', niche: 'indie', priority: 'high' },
+  { username: 'dannypostmaa', niche: 'indie', priority: 'high' },
   { username: 'yaborgs', niche: 'dev', priority: 'medium' },
   { username: 'swyx', niche: 'dev', priority: 'medium' },
   { username: 'aiaborgs', niche: 'AI tools', priority: 'medium' },
-  { username: 'shl', niche: 'indie', priority: 'low' }
+  { username: 'shl', niche: 'indie', priority: 'medium' },
+
+  // === MID-TIER CREATORS (1K-50K followers, high reply rate) ===
+  { username: 'joshpitzalis', niche: 'indie', priority: 'high' },
+  { username: 'dvassallo', niche: 'indie', priority: 'high' },
+  { username: 'araborimof', niche: 'indie', priority: 'high' },
+  { username: 'yaborimof', niche: 'AI tools', priority: 'high' },
+  { username: 'jmcunning', niche: 'dev', priority: 'high' },
+  { username: 'rauchg', niche: 'dev', priority: 'high' },
+  { username: 't3dotgg', niche: 'dev', priority: 'high' },
+  { username: 'maaborgs', niche: 'crypto', priority: 'high' },
+  { username: 'nickfloats', niche: 'indie', priority: 'high' },
+  { username: 'maborgs', niche: 'vibe coding', priority: 'high' }
 ]
 
 /**
@@ -238,6 +258,11 @@ function calculateScore(tweet, config) {
       score += 10 // Algum engajamento
     }
   }
+
+  // === SWEET SPOT: contas médias respondem mais ===
+  const likes = tweet.likes || 0
+  if (likes >= 10 && likes <= 500) score += 15   // Sweet spot: mais provável de responder
+  else if (likes > 5000) score -= 15              // Mega-conta: nunca responde
 
   // === NOVAS FONTES ===
 

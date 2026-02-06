@@ -4,31 +4,31 @@
       "username": "levelsio",
       "niche": "indie hackers",
       "followers": "500k+",
-      "priority": "high"
+      "priority": "medium"
     },
     {
       "username": "naval",
       "niche": "startups/philosophy",
       "followers": "2M+",
-      "priority": "high"
+      "priority": "low"
     },
     {
       "username": "paulg",
       "niche": "startups/YC",
       "followers": "1.5M+",
-      "priority": "high"
+      "priority": "low"
     },
     {
       "username": "sama",
       "niche": "AI/OpenAI",
       "followers": "3M+",
-      "priority": "high"
+      "priority": "low"
     },
     {
       "username": "elonmusk",
       "niche": "tech/general",
       "followers": "150M+",
-      "priority": "medium"
+      "priority": "low"
     },
     {
       "username": "dhaborimof",
@@ -40,13 +40,13 @@
       "username": "andrewchen",
       "niche": "growth/startups",
       "followers": "700k+",
-      "priority": "high"
+      "priority": "medium"
     },
     {
       "username": "pmarca",
       "niche": "tech/VC",
       "followers": "1M+",
-      "priority": "medium"
+      "priority": "low"
     },
     {
       "username": "swyx",
@@ -58,6 +58,42 @@
       "username": "emaborimof",
       "niche": "crypto/startups",
       "followers": "200k+",
+      "priority": "high"
+    },
+    {
+      "username": "marc_loub",
+      "niche": "indie",
+      "followers": "30k+",
+      "priority": "high"
+    },
+    {
+      "username": "tdinh_me",
+      "niche": "indie",
+      "followers": "20k+",
+      "priority": "high"
+    },
+    {
+      "username": "dannypostmaa",
+      "niche": "indie",
+      "followers": "15k+",
+      "priority": "high"
+    },
+    {
+      "username": "dvassallo",
+      "niche": "indie",
+      "followers": "40k+",
+      "priority": "high"
+    },
+    {
+      "username": "t3dotgg",
+      "niche": "dev",
+      "followers": "30k+",
+      "priority": "high"
+    },
+    {
+      "username": "rauchg",
+      "niche": "dev",
+      "followers": "50k+",
       "priority": "high"
     }
   ],
@@ -89,26 +125,36 @@
     "enabled": true,
     "accounts_per_cycle": 3,
     "accounts": [
-      { "username": "sama", "niche": "AI", "priority": "high" },
-      { "username": "karpathy", "niche": "AI", "priority": "high" },
-      { "username": "ylecun", "niche": "AI", "priority": "high" },
-      { "username": "paulg", "niche": "startups", "priority": "high" },
-      { "username": "naval", "niche": "philosophy", "priority": "high" },
-      { "username": "balajis", "niche": "tech", "priority": "high" },
-      { "username": "levelsio", "niche": "indie", "priority": "high" },
+      { "username": "sama", "niche": "AI", "priority": "low" },
+      { "username": "karpathy", "niche": "AI", "priority": "low" },
+      { "username": "ylecun", "niche": "AI", "priority": "low" },
+      { "username": "paulg", "niche": "startups", "priority": "low" },
+      { "username": "naval", "niche": "philosophy", "priority": "low" },
+      { "username": "balajis", "niche": "tech", "priority": "medium" },
+      { "username": "levelsio", "niche": "indie", "priority": "medium" },
       { "username": "marc_loub", "niche": "indie", "priority": "high" },
-      { "username": "TaviCosta", "niche": "macro", "priority": "high" },
+      { "username": "TaviCosta", "niche": "macro", "priority": "medium" },
       { "username": "garrytan", "niche": "VC", "priority": "medium" },
       { "username": "jason", "niche": "VC", "priority": "medium" },
       { "username": "rrhoover", "niche": "product", "priority": "medium" },
-      { "username": "tdinh_me", "niche": "indie", "priority": "medium" },
-      { "username": "dannypostmaa", "niche": "indie", "priority": "medium" },
+      { "username": "tdinh_me", "niche": "indie", "priority": "high" },
+      { "username": "dannypostmaa", "niche": "indie", "priority": "high" },
       { "username": "swyx", "niche": "dev", "priority": "medium" },
       { "username": "Investanswers", "niche": "crypto", "priority": "medium" },
       { "username": "DocumentingBTC", "niche": "crypto", "priority": "medium" },
       { "username": "intocryptoverse", "niche": "crypto", "priority": "medium" },
-      { "username": "APompliano", "niche": "crypto", "priority": "medium" },
-      { "username": "shl", "niche": "indie", "priority": "low" }
+      { "username": "APompliano", "niche": "crypto", "priority": "low" },
+      { "username": "shl", "niche": "indie", "priority": "medium" },
+      { "username": "joshpitzalis", "niche": "indie", "priority": "high" },
+      { "username": "dvassallo", "niche": "indie", "priority": "high" },
+      { "username": "araborimof", "niche": "indie", "priority": "high" },
+      { "username": "yaborimof", "niche": "AI tools", "priority": "high" },
+      { "username": "jmcunning", "niche": "dev", "priority": "high" },
+      { "username": "rauchg", "niche": "dev", "priority": "high" },
+      { "username": "t3dotgg", "niche": "dev", "priority": "high" },
+      { "username": "maaborgs", "niche": "crypto", "priority": "high" },
+      { "username": "nickfloats", "niche": "indie", "priority": "high" },
+      { "username": "maborgs", "niche": "vibe coding", "priority": "high" }
     ]
   },
   "hype_mode": {
@@ -130,8 +176,8 @@
     "max_replies_per_app_per_day": 5
   },
   "filters": {
-    "min_likes": 10,
-    "max_replies": 200,
+    "min_likes": 5,
+    "max_replies": 100,
     "max_age_hours": 12,
     "prefer_questions": true,
     "prefer_opinions": true

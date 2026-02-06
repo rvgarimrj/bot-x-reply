@@ -64,12 +64,18 @@ const BANNED_STARTERS = {
  */
 export function getStyleHint(language, lastStyles = []) {
   const styles = STYLE_ROTATION[language] || STYLE_ROTATION.en
-  // Evita repetir os últimos 5 estilos usados (mais restritivo)
-  const available = styles.filter(s => !lastStyles.slice(-5).includes(s.name))
-  // Se todos foram usados recentemente, usa qualquer um exceto o último
-  const pool = available.length > 0 ? available : styles.filter(s => s.name !== lastStyles[lastStyles.length - 1])
-  const chosen = pool[Math.floor(Math.random() * pool.length)] || styles[0]
-  return chosen
+  const questionStyle = styles.find(s => s.name === 'question' || s.name === 'pergunta')
+  const lastStyle = lastStyles[lastStyles.length - 1]
+
+  // 40% chance de pergunta (se não foi o último estilo)
+  if (questionStyle && Math.random() < 0.4 && questionStyle.name !== lastStyle) {
+    return questionStyle
+  }
+
+  // 60%: rotação normal entre outros estilos (evita últimos 3)
+  const available = styles.filter(s => !lastStyles.slice(-3).includes(s.name))
+  const pool = available.length > 0 ? available : styles.filter(s => s.name !== lastStyle)
+  return pool[Math.floor(Math.random() * pool.length)] || styles[0]
 }
 
 /**
