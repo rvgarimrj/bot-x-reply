@@ -97,9 +97,9 @@ const CONFIG = {
     hour: 23,
     minute: 30
   },
-  // Horarios a evitar (outro robo roda nesses horarios)
-  avoidHours: [8, 12, 18, 22, 0],
-  avoidMinuteBuffer: 5
+  // Evita TODOS horários redondos (:00 ±3min) - outro robô posta nos :00
+  avoidRoundHours: true,
+  avoidMinuteBuffer: 3
 }
 
 // Estado do daemon
@@ -544,7 +544,7 @@ async function main() {
   console.log(`    - Medium (${CONFIG.peakHours.medium.join(',')}h): ${CONFIG.peakIntervals.medium.min}-${CONFIG.peakIntervals.medium.max}min`)
   console.log(`    - Low: ${CONFIG.peakIntervals.low.min}-${CONFIG.peakIntervals.low.max}min`)
   console.log(`  Resumo: ${CONFIG.summary.hour}:${CONFIG.summary.minute}`)
-  console.log(`  Evita: ${CONFIG.avoidHours.map(h => h + 'h').join(', ')} (+/-${CONFIG.avoidMinuteBuffer}min)`)
+  console.log(`  Evita: TODOS horários redondos (:00 ±${CONFIG.avoidMinuteBuffer}min)`)
 
   // Mostra melhores fontes aprendidas
   const bestSources = getBestSources(3)
