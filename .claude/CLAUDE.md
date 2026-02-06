@@ -129,10 +129,17 @@ curl -s http://127.0.0.1:9222/json/version | head -1
 3. **Hacker News** - Tweets sobre posts HN
 4. **Creator Inspiration** - Curados pelo X
 5. **Keyword Search** - Busca ativa por termos
-6. **Monitored Accounts** - VIPs não seguidos (sama, paulg, karpathy...)
+6. **Monitored Accounts** - Mid-tier creators prioritizados (marc_loub, tdinh_me, dvassallo...)
 7. **Hype Mode** - Alto engajamento (30% ciclos)
 
 **Nicho**: Tech/AI/Crypto/Startups/Vibe Coding
+
+**Estratégia de Scoring (2026-02-06):**
+- Sweet spot: +15 para tweets com 10-500 likes (contas médias respondem mais)
+- Penalidade: -15 para tweets com >5000 likes (mega-contas nunca respondem)
+- Keywords para small creators: min_faves 5-20 (vs 50-500 anterior)
+- Mega-contas (sama, paulg, karpathy) rebaixadas para priority "low"
+- Mid-tier creators (1K-50K followers) como priority "high"
 
 ---
 
@@ -196,6 +203,9 @@ cat data/knowledge.json | jq '.replies | length'
 | Verificação falso positivo | SEMPRE recarregar e buscar reply na thread |
 | "Sair do site?" modal | Handler de dialog no Puppeteer (fix 2026-02-05) |
 | R2R contagem errada | Contador por PESSOA, não por tweet (fix 2026-02-05) |
+| R2R loop em bloqueado | Marca como processado mesmo em falha (fix 2026-02-06) |
+| Ano errado nos replies | `fixYear()` corrige 2023-2025→2026 antes de postar (fix 2026-02-06) |
+| Múltiplos daemons após restart | Matar wrapper E node: `pkill -9 -f start-daemon; pkill -9 -f auto-daemon` |
 
 ---
 
@@ -270,6 +280,65 @@ cat data/knowledge.json | jq '.replies | length'
 6. Crontab: R2R nos minutos :07/:22/:37/:52 (evita conflito com posts agendados nos :00)
 
 **Commit:** `7bc4927` - fix: R2R frame detached + daemon tab conflict
+
+---
+
+## 🎯 Otimização: Contas Menores + Perguntas (2026-02-06)
+
+### Problema
+- Author reply rate: 0% em 238 replies
+- Mega-contas (sama 3M+, paulg 1.5M+) nunca respondem
+- Apenas 3% de replies eram perguntas (meta: 40%)
+
+### Mudanças
+
+1. **Scoring sweet spot** (`src/discovery.js`): +15 para 10-500 likes, -15 para >5000
+2. **Keywords small creators** (`src/discovery.js`): 6 queries novas com min_faves 5-20
+3. **Monitored accounts** (`src/discovery.js` + `config/accounts.json`): mega-contas→low, 10 mid-tier→high
+4. **40% question bias** (`src/claude.js`): `getStyleHint()` seleciona pergunta 40% das vezes, dedup window 5→3
+5. **Filtros** (`config/accounts.json`): min_likes 10→5, max_replies 200→100
+
+**Commits:**
+- `6c24960` - feat: Focus on smaller accounts + 40% question bias
+- `b138ae4` - fix: R2R marks blocked/failed replies as processed
+
+### Fix: Ano errado nos replies
+
+**Causa:** Claude knowledge cutoff gera "2024"/"2025" em vez de 2026.
+
+**Solução (3 camadas):**
+1. Prompt inclui "Estamos em {ano atual}" (hint)
+2. `fixYear()` em `src/claude.js` corrige 2023-2025→ano atual nos replies do daemon
+3. `fixYear()` em `scripts/reply-to-reply.js` corrige nos replies do R2R
+4. Usa `new Date().getFullYear()` - não precisa atualizar manualmente
+
+**Commits:**
+- `391a9ce` - fix: Add current year to Claude prompts
+- `ec907c0` - fix: Auto-correct wrong years (fixYear filter)
+
+### Fix: R2R loop em user bloqueado
+
+**Causa:** `author_blocked` não era marcado como processado → re-tentava infinitamente.
+
+**Solução:** Sempre adiciona `tweetId` a `repliedTo` após tentativa, independente do resultado.
+
+**Commit:** `b138ae4`
+
+### Fix: Múltiplos daemons
+
+**Causa:** `pkill -9` mata o node mas wrapper `start-daemon.sh` reinicia. Múltiplos wrappers acumulam.
+
+**Solução correta para restart:**
+```bash
+# Matar TUDO (wrapper + node)
+pkill -9 -f "start-daemon.sh"; pkill -9 -f "auto-daemon.js"
+# Esperar
+sleep 2
+# Iniciar 1 só
+nohup ./scripts/start-daemon.sh >> logs/auto-daemon.log 2>&1 &
+# Verificar
+ps -ef | grep -i "auto-daemon\|start-daemon" | grep -v grep
+```
 
 ---
 
