@@ -352,7 +352,11 @@ async function generateFriendlyReply(theirReply, context = null) {
     }
   }
 
+  const currentYear = new Date().getFullYear()
+
   const prompt = `Você é Gabriel (@gabrielabiramia), respondendo a alguém em uma conversa no Twitter/X.
+
+IMPORTANTE: Estamos em ${currentYear}. Se mencionar ano, use ${currentYear}.
 
 ${contextStr ? '=== CONTEXTO DA CONVERSA ===\n' + contextStr : ''}
 === REPLY DA PESSOA (para você responder) ===

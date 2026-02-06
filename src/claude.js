@@ -100,7 +100,11 @@ export function getAvailableStyles(language) {
  *
  * OBJETIVO: Fazer o AUTOR RESPONDER nosso reply (não impressionar com conhecimento)
  */
+const CURRENT_YEAR = new Date().getFullYear()
+
 const REPLY_SYSTEM_PROMPT = `Você gera replies curtos que INICIAM CONVERSA.
+
+IMPORTANTE: Estamos em ${CURRENT_YEAR}. Se mencionar ano, use ${CURRENT_YEAR}.
 
 PERFIL: @${profile.x_username || 'user'} - ${(profile.expertise || []).join(', ')}
 
