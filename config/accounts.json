@@ -176,9 +176,9 @@
     "max_replies_per_app_per_day": 5
   },
   "filters": {
-    "min_likes": 5,
-    "max_replies": 100,
-    "max_age_hours": 12,
+    "min_likes": 3,
+    "max_replies": 300,
+    "max_age_hours": 18,
     "prefer_questions": true,
     "prefer_opinions": true
   },

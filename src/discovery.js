@@ -197,9 +197,11 @@ function calculateScore(tweet, config) {
     // Bonus proporcional ao número de replies
     score += Math.min(tweet.replies, 500) / 10
   } else {
-    // Para outras fontes, muitos replies = competição alta = penaliza
-    if (tweet.replies > (filters.max_replies || 100)) {
+    // Para outras fontes, muitos replies = mais competição (penaliza gradualmente)
+    if (tweet.replies > 500) {
       score -= 30
+    } else if (tweet.replies > (filters.max_replies || 300)) {
+      score -= 15
     }
   }
 

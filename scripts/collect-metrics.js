@@ -191,9 +191,17 @@ async function main() {
     return false
   })
 
-  // Limita para não sobrecarregar
+  // Prioriza replies recentes (últimas 48h) antes dos antigos
+  const now = Date.now()
+  toCollect.sort((a, b) => {
+    const ageA = now - new Date(a.timestamp).getTime()
+    const ageB = now - new Date(b.timestamp).getTime()
+    return ageA - ageB // Mais recentes primeiro
+  })
+
+  // Limita para não sobrecarregar (50 por rodada, era 20)
   if (!collectAll) {
-    toCollect = toCollect.slice(0, 20)
+    toCollect = toCollect.slice(0, 50)
   }
 
   console.log(`Replies totais: ${replies.length}`)
@@ -254,7 +262,7 @@ async function main() {
     }
 
     // Delay entre requests
-    await randomDelay(3000, 5000)
+    await randomDelay(2000, 4000)
   }
 
   // Resumo

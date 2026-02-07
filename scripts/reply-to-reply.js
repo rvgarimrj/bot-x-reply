@@ -140,9 +140,10 @@ async function findRepliesToOurReplies(browser) {
     await page.setDefaultTimeout(60000)
 
     // Handler para dialogs (aceita beforeunload automaticamente)
-    page.on('dialog', async dialog => {
-      await dialog.accept()
-    })
+    const dialogHandler = async dialog => {
+      await dialog.accept().catch(() => {})
+    }
+    page.on('dialog', dialogHandler)
 
     // Vai para notificações
     console.log('Acessando notificações...')
@@ -266,6 +267,7 @@ async function findRepliesToOurReplies(browser) {
       console.log(`Fim das notificações (${scrollNum} scrolls, ${emptyScrolls} vazios)`)
     }
 
+    page.removeListener('dialog', dialogHandler)
     await page.close().catch(() => {})
 
     console.log(`Encontrados ${replies.length} replies para responder (de ${seenIds.size} verificados)`)
@@ -286,9 +288,10 @@ async function fetchThreadContext(browser, tweetUrl) {
     page = await browser.newPage()
     await page.setDefaultTimeout(30000)
 
-    page.on('dialog', async dialog => {
-      await dialog.accept()
-    })
+    const threadDialogHandler = async dialog => {
+      await dialog.accept().catch(() => {})
+    }
+    page.on('dialog', threadDialogHandler)
 
     console.log('📖 Lendo contexto da thread...')
     await page.goto(tweetUrl, { waitUntil: 'networkidle2' })
@@ -328,12 +331,16 @@ async function fetchThreadContext(browser, tweetUrl) {
       return result
     })
 
+    page.removeListener('dialog', threadDialogHandler)
     await page.close()
     return context
 
   } catch (e) {
     console.log('⚠️ Erro ao buscar contexto:', e.message)
-    if (page) await page.close().catch(() => {})
+    if (page) {
+      page.removeAllListeners('dialog')
+      await page.close().catch(() => {})
+    }
     return null
   }
 }

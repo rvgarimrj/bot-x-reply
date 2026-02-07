@@ -396,10 +396,11 @@ export async function postReply(url, replyText) {
     const page = await browser.newPage()
 
     // Handler para dialogs (aceita beforeunload automaticamente)
-    page.on('dialog', async dialog => {
+    const dialogHandler = async dialog => {
       console.log('Dialog detectado:', dialog.type(), dialog.message())
-      await dialog.accept()
-    })
+      await dialog.accept().catch(() => {})
+    }
+    page.on('dialog', dialogHandler)
 
     // Aumenta timeouts para operações na página
     page.setDefaultTimeout(60000) // 60s para operações gerais
@@ -407,8 +408,8 @@ export async function postReply(url, replyText) {
 
     await page.setViewport({ width: 1280, height: 800 })
 
-    // Fecha TODAS as outras abas antes de postar (evita reply ir pra aba errada)
-    await closeExcessTabs(browser, 2, page)
+    // Fecha abas em excesso (4 = margem para R2R e metrics rodando em paralelo)
+    await closeExcessTabs(browser, 4, page)
 
     console.log('Navegando para:', url)
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 })
@@ -854,6 +855,9 @@ export async function postReply(url, replyText) {
     await page.screenshot({ path: screenshotPath })
     console.log('Screenshot salvo:', screenshotPath)
 
+    // Limpa listener antes de fechar (evita memory leak)
+    page.removeListener('dialog', dialogHandler)
+
     // Fecha aba
     await safeClosePage(browser, page)
 
@@ -874,6 +878,15 @@ export async function postReply(url, replyText) {
 
   } catch (error) {
     console.error('Erro ao postar reply:', error.message)
+    // Tenta fechar a página se ainda existe (evita leak)
+    try {
+      const pages = await browser.pages()
+      const orphanPages = pages.filter(p => p.url().includes('/status/'))
+      for (const p of orphanPages) {
+        p.removeAllListeners('dialog')
+        await p.close().catch(() => {})
+      }
+    } catch {}
     return { success: false, error: error.message }
   } finally {
     if (shouldClose) {

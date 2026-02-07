@@ -502,6 +502,14 @@ async function mainLoop() {
       // Executa ciclo
       await runReplyCycle()
 
+      // Monitora memória - avisa se está alto
+      const memUsage = process.memoryUsage()
+      const heapMB = Math.round(memUsage.heapUsed / 1024 / 1024)
+      if (heapMB > 300) {
+        console.log(`⚠️ Memória alta: ${heapMB}MB heap - forçando GC`)
+        if (global.gc) global.gc()
+      }
+
       // Calcula proximo intervalo
       const nextInterval = calculateNextInterval()
       console.log(`Proximo ciclo em ${nextInterval} minutos...`)

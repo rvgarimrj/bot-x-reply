@@ -70,10 +70,56 @@ async function connectToChrome() {
 }
 
 /**
+ * Extrai contagem de followers do perfil do X (fonte confiável)
+ */
+async function extractFollowersFromProfile(browser) {
+  const page = await browser.newPage()
+  try {
+    page.setDefaultTimeout(30000)
+    await page.goto('https://x.com/gabrielabiramia', {
+      waitUntil: 'networkidle2',
+      timeout: 30000
+    })
+    await new Promise(r => setTimeout(r, 3000))
+
+    const followers = await page.evaluate(() => {
+      // Procura links de followers no perfil (ex: "31 Followers", "31 Seguidores")
+      const links = document.querySelectorAll('a[href*="/verified_followers"], a[href*="/followers"]')
+      for (const link of links) {
+        const text = link.textContent.trim()
+        const match = text.match(/^([\d,.]+[KMkm]?)\s/i)
+        if (match) return match[1]
+      }
+      // Fallback: busca no texto "N Following N Followers"
+      const bodyText = document.body.innerText
+      const match = bodyText.match(/(\d+(?:,\d+)*(?:\.\d+)?[KMkm]?)\s+(?:Followers|Seguidores)(?!\s+(?:ao longo|verificados))/i)
+      if (match) return match[1]
+      return null
+    })
+
+    await page.close()
+    return followers
+  } catch (e) {
+    console.log(`  ⚠️ Erro ao extrair followers do perfil: ${e.message}`)
+    await page.close().catch(() => {})
+    return null
+  }
+}
+
+/**
  * Coleta métricas do X Analytics
  */
 async function collectAnalytics(browser) {
   console.log(`\n${COLORS.cyan}📊 Coletando métricas do X Analytics...${COLORS.reset}\n`)
+
+  // 1. Extrai followers do perfil (fonte confiável, não do analytics)
+  console.log('  👤 Extraindo followers do perfil...')
+  const profileFollowers = await extractFollowersFromProfile(browser)
+  if (profileFollowers) {
+    console.log(`  ✅ Followers do perfil: ${profileFollowers}`)
+  } else {
+    console.log(`  ⚠️ Não foi possível extrair followers do perfil`)
+  }
 
   const page = await browser.newPage()
 
@@ -118,9 +164,9 @@ async function collectAnalytics(browser) {
       data.raw.bodyText = bodyText.slice(0, 5000) // Primeiros 5000 chars para debug
 
       // Tenta encontrar métricas específicas
-      // Padrões comuns no X Analytics
+      // NOTA: NÃO extraímos 'followers' do bodyText - era bugado (pegava datas do gráfico)
+      // Followers vem do perfil (extractFollowersFromProfile)
       const patterns = [
-        { key: 'followers', regex: /(\d+(?:,\d+)*(?:\.\d+)?[KMkm]?)\s*(?:Seguidores|Followers)/i },
         { key: 'impressions', regex: /(?:Impressões|Impressions)[:\s]*(\d+(?:,\d+)*(?:\.\d+)?[KMkm]?)/i },
         { key: 'engagements', regex: /(?:Engajamentos|Engagements)[:\s]*(\d+(?:,\d+)*(?:\.\d+)?[KMkm]?)/i },
         { key: 'engagementRate', regex: /(?:Taxa de engajamento|Engagement rate)[:\s]*(\d+(?:\.\d+)?%?)/i },
@@ -137,15 +183,23 @@ async function collectAnalytics(browser) {
         }
       }
 
+      // Extrai "Seguidores verificados" (ex: "Seguidores verificados\n159\n/ \n1K")
+      const verifiedMatch = bodyText.match(/Seguidores verificados\s+(\d+(?:,\d+)*(?:\.\d+)?[KMkm]?)/i)
+      if (verifiedMatch) {
+        data.raw.verifiedFollowers = verifiedMatch[1]
+        data.parsed.verifiedFollowers = extractNumber(verifiedMatch[1])
+      }
+
       // Tenta capturar mudanças percentuais
+      // Usa regex ancorada na seção de stats (após "Seguidores verificados")
+      const statsSection = bodyText.slice(bodyText.indexOf('Seguidores verificados') || 0)
       const changePatterns = [
-        { key: 'followersChange', regex: /(?:Seguidores|Followers)[\s\S]{0,100}?([+-]?\d+(?:\.\d+)?%)/i },
-        { key: 'impressionsChange', regex: /(?:Impressões|Impressions)[\s\S]{0,100}?([+-]?\d+(?:\.\d+)?%)/i },
-        { key: 'engagementsChange', regex: /(?:Engajamentos|Engagements)[\s\S]{0,100}?([+-]?\d+(?:\.\d+)?%)/i }
+        { key: 'impressionsChange', regex: /(?:Impressões|Impressions)[\s\S]{0,60}?([\d.]+%)/i },
+        { key: 'engagementsChange', regex: /(?:Engajamentos|Engagements)[\s\S]{0,60}?([\d.]+%)/i }
       ]
 
       for (const { key, regex } of changePatterns) {
-        const match = bodyText.match(regex)
+        const match = statsSection.match(regex)
         if (match) {
           data.raw[key] = match[1]
           data.parsed[key] = extractPercentage(match[1])
@@ -154,6 +208,20 @@ async function collectAnalytics(browser) {
 
       return data
     })
+
+    // Injeta followers do perfil (fonte confiável)
+    if (profileFollowers) {
+      const extractNumber = (text) => {
+        if (!text) return null
+        const clean = text.replace(/[^\d.KMkm]/g, '').trim()
+        if (!clean) return null
+        if (clean.toLowerCase().includes('k')) return parseFloat(clean) * 1000
+        if (clean.toLowerCase().includes('m')) return parseFloat(clean) * 1000000
+        return parseFloat(clean) || null
+      }
+      metrics.raw.followers = profileFollowers
+      metrics.parsed.followers = extractNumber(profileFollowers)
+    }
 
     // Screenshot para análise manual
     const screenshotPath = path.join(__dirname, '..', 'data', 'analytics-screenshot.png')
@@ -468,7 +536,7 @@ function generateReport(today, comparison, analysis) {
 
   // Progresso para metas
   lines.push('\n🎯 PROGRESSO PARA MONETIZAÇÃO:')
-  lines.push(`  • 500 Premium followers: ${parsed.followers || '?'}/${GOALS.premiumFollowers}`)
+  lines.push(`  • 500 Premium followers: ${parsed.followers || '?'}/${GOALS.premiumFollowers} (verificados: ${parsed.verifiedFollowers || '?'})`)
   lines.push(`  • 5M impressões/3 meses: meta diária ${GOALS.dailyImpressions.toLocaleString()}`)
 
   lines.push('\n' + '═'.repeat(55))

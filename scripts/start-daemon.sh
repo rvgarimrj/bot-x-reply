@@ -8,7 +8,7 @@ cd "$SCRIPT_DIR"
 
 while true; do
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] Iniciando auto-daemon..."
-  $NODE scripts/auto-daemon.js
+  $NODE --expose-gc --max-old-space-size=512 scripts/auto-daemon.js
   EXIT_CODE=$?
 
   if [ $EXIT_CODE -eq 0 ]; then
