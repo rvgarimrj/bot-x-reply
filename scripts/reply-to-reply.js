@@ -433,32 +433,27 @@ async function likeAndReply(browser, tweetUrl, replyText) {
   console.log(`Navegando para: ${tweetUrl}`)
   console.log(`Digitando: "${replyText}"`)
 
-  // Retry: contextos podem ser destruídos por conflito com daemon
-  const MAX_RETRIES = 2
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const result = await daemonPostReply(tweetUrl, replyText)
+  // Tenta postar (sem retry cego - evita duplicatas)
+  try {
+    const result = await daemonPostReply(tweetUrl, replyText)
 
-      if (result && result.success) {
-        console.log('✅ Reply postado!')
-        return true
-      } else if (result?.error === 'replies_restricted' || result?.error === 'author_blocked') {
-        console.log(`⏭️ Pulando: ${result.error}`)
-        return false
-      } else {
-        console.log(`❌ Falha ao postar (tentativa ${attempt}/${MAX_RETRIES}):`, result?.error || 'erro desconhecido')
-      }
-    } catch (e) {
-      console.log(`❌ Erro (tentativa ${attempt}/${MAX_RETRIES}):`, e.message)
+    if (result && result.success) {
+      console.log('✅ Reply postado!')
+      return true
+    } else if (result?.error === 'replies_restricted' || result?.error === 'author_blocked') {
+      console.log(`⏭️ Pulando: ${result.error}`)
+      return false
+    } else {
+      // Verificação falhou - mas o reply PODE ter sido postado (falso negativo)
+      // NÃO fazer retry para evitar duplicata. Melhor perder 1 reply que postar 2x.
+      console.log(`❌ Falha ao postar: ${result?.error || 'erro desconhecido'}`)
+      console.log('⚠️ Sem retry (evita reply duplicado)')
+      return false
     }
-
-    if (attempt < MAX_RETRIES) {
-      console.log('Aguardando 5s antes de retry...')
-      await new Promise(r => setTimeout(r, 5000))
-    }
+  } catch (e) {
+    console.log(`❌ Erro ao postar: ${e.message}`)
+    return false
   }
-
-  return false
 }
 
 /**

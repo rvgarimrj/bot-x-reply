@@ -390,16 +390,9 @@ async function runReplyCycle() {
       console.log(`Reply gerado (${result.language}, estilo: ${style}):`)
       console.log(`"${reply}"`)
 
-      // Posta via Puppeteer (com retry para detached frame)
+      // Posta via Puppeteer (sem retry - evita replies duplicados)
       console.log('Postando via Chrome...')
-      let postResult = await postReply(tweet.url, reply)
-
-      // Retry automático para "detached Frame" - erro transiente do X
-      if (!postResult.success && postResult.error?.includes('detached Frame')) {
-        console.log('🔄 Frame desconectou - aguardando 3s e retentando...')
-        await new Promise(r => setTimeout(r, 3000))
-        postResult = await postReply(tweet.url, reply)
-      }
+      const postResult = await postReply(tweet.url, reply)
 
       // Se replies restritos, tenta proximo tweet
       if (!postResult.success && postResult.skippable) {
