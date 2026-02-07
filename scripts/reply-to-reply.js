@@ -267,7 +267,7 @@ async function findRepliesToOurReplies(browser) {
       console.log(`Fim das notificações (${scrollNum} scrolls, ${emptyScrolls} vazios)`)
     }
 
-    page.removeListener('dialog', dialogHandler)
+    page.off('dialog', dialogHandler)
     await page.close().catch(() => {})
 
     console.log(`Encontrados ${replies.length} replies para responder (de ${seenIds.size} verificados)`)
@@ -331,14 +331,14 @@ async function fetchThreadContext(browser, tweetUrl) {
       return result
     })
 
-    page.removeListener('dialog', threadDialogHandler)
+    page.off('dialog', threadDialogHandler)
     await page.close()
     return context
 
   } catch (e) {
     console.log('⚠️ Erro ao buscar contexto:', e.message)
     if (page) {
-      page.removeAllListeners('dialog')
+      page.removeAllListeners?.('dialog')
       await page.close().catch(() => {})
     }
     return null

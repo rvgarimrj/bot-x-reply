@@ -856,7 +856,7 @@ export async function postReply(url, replyText) {
     console.log('Screenshot salvo:', screenshotPath)
 
     // Limpa listener antes de fechar (evita memory leak)
-    page.removeListener('dialog', dialogHandler)
+    page.off('dialog', dialogHandler)
 
     // Fecha aba
     await safeClosePage(browser, page)
@@ -883,7 +883,7 @@ export async function postReply(url, replyText) {
       const pages = await browser.pages()
       const orphanPages = pages.filter(p => p.url().includes('/status/'))
       for (const p of orphanPages) {
-        p.removeAllListeners('dialog')
+        p.removeAllListeners?.('dialog')
         await p.close().catch(() => {})
       }
     } catch {}
