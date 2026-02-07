@@ -415,6 +415,9 @@ export async function postReply(url, replyText) {
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 })
     await humanDelay(HUMAN_CONFIG.delays.pageLoad)
 
+    // Aguarda frame estabilizar (previne "detached Frame" errors)
+    await page.waitForFunction(() => document.readyState === 'complete', { timeout: 10000 }).catch(() => {})
+
     // Extrai tweet ID da URL alvo
     const targetTweetId = url.split('/status/')[1]?.split(/[?#]/)[0]
 
