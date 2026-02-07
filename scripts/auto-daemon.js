@@ -460,6 +460,13 @@ async function runReplyCycle() {
       } else {
         console.log('Falha ao postar:', postResult.error)
         recordError(postResult.error)
+        // Registra como tentado para não ficar em loop no mesmo tweet
+        recordReply(tweet.url, {
+          author: tweet.author,
+          language: result?.language || 'en',
+          style: style,
+          failed: true
+        })
         return // Erro nao-pulavel, sai do loop
       }
     } // fim do for

@@ -118,12 +118,12 @@
   },
   "keyword_search": {
     "enabled": true,
-    "keywords_per_cycle": 2,
-    "bonus_score": 12
+    "keywords_per_cycle": 3,
+    "bonus_score": 20
   },
   "monitor_accounts": {
     "enabled": true,
-    "accounts_per_cycle": 3,
+    "accounts_per_cycle": 5,
     "accounts": [
       { "username": "sama", "niche": "AI", "priority": "low" },
       { "username": "karpathy", "niche": "AI", "priority": "low" },

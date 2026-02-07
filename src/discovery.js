@@ -182,10 +182,36 @@ async function safeClosePage(browser, page) {
  *   - Tab "replies": +15 adicional (alta conversação = chance de 75x boost)
  * - Autor engajado: +10/+25/+40 baseado em quantos replies o autor faz
  */
+// Contas de notícia/política que NUNCA respondem replies
+// Geram impressões vazias sem seguidores
+const NEWS_BLOCKLIST = new Set([
+  // US News
+  'foxnews', 'cnn', 'bbc', 'nytimes', 'washingtonpost', 'reuters',
+  'breaking911', 'whitehouse', 'potus', 'dailysignal', 'breitbartnews',
+  'newslogged', 'dailycaller', 'thehill', 'nypost', 'abc', 'nbcnews',
+  'cbsnews', 'msnbc', 'spectatorindex', 'disclosetv', 'deitaone',
+  'realdailywire', 'dailywire',
+  // Politics
+  'rightscope', 'rightscopee', 'magavoice', 'trumpwarroom',
+  'rapidresponse47', 'highwiretalk', 'zerohedge',
+  // Geopolitics/BRICS
+  'brics', 'bricsinfo', 'baborimof', 'waborimof',
+  // World leaders (never reply)
+  'narendramodi', 'joebiden', 'vaborimof',
+  // Macro brands (never reply)
+  'base', 'solana', 'coingecko', 'coinbase'
+])
+
 function calculateScore(tweet, config) {
   let score = 0
   const filters = config.filters || {}
   const isCreatorInspiration = tweet.source === 'creator_inspiration'
+  const authorLower = tweet.author?.toLowerCase() || ''
+
+  // === BLOCKLIST: contas de notícia/política = -100 (praticamente elimina) ===
+  if (NEWS_BLOCKLIST.has(authorLower)) {
+    return -100
+  }
 
   // Engajamento base
   score += Math.min(tweet.likes, 10000) / 100
@@ -193,11 +219,8 @@ function calculateScore(tweet, config) {
 
   // Replies: comportamento diferente por fonte
   if (isCreatorInspiration && tweet.inspirationTab === 'replies') {
-    // Para "Most replies", muitos replies é BOM (alta conversação)
-    // Bonus proporcional ao número de replies
     score += Math.min(tweet.replies, 500) / 10
   } else {
-    // Para outras fontes, muitos replies = mais competição (penaliza gradualmente)
     if (tweet.replies > 500) {
       score -= 30
     } else if (tweet.replies > (filters.max_replies || 300)) {
@@ -208,14 +231,13 @@ function calculateScore(tweet, config) {
   // Bonus se recente (tweets novos têm mais visibilidade)
   if (tweet.datetime) {
     const ageHours = (Date.now() - new Date(tweet.datetime).getTime()) / 3600000
-    // Creator Inspiration tem janela maior (tweets curados podem ser mais velhos)
     const maxAge = isCreatorInspiration ? 24 : (filters.max_age_hours || 6)
 
     if (ageHours < 1) score += 50
     else if (ageHours < 2) score += 40
     else if (ageHours < 4) score += 20
     else if (ageHours < 8) score += 10
-    else if (ageHours > maxAge) score -= 30 // Penalização menor
+    else if (ageHours > maxAge) score -= 30
   }
 
   // Bonus pergunta (convida resposta)
@@ -226,69 +248,70 @@ function calculateScore(tweet, config) {
   if (opinionWords.test(tweet.text)) score += 15
 
   // Prioridade da conta configurada
-  const account = config.priority_accounts?.find(a => a.username.toLowerCase() === tweet.author?.toLowerCase())
+  const account = config.priority_accounts?.find(a => a.username.toLowerCase() === authorLower)
   if (account?.priority === 'high') score += 30
   else if (account?.priority === 'medium') score += 15
 
   // === BONUS POR FONTE ===
 
-  // Trending topics
-  if (tweet.source === 'trending') score += 10
+  // Timeline: penalizar levemente (muito news/política, pouco author reply)
+  if (tweet.source === 'timeline') score -= 10
 
-  // HackerNews (tech relevance)
-  if (tweet.source === 'hackernews') score += 15
+  // Trending topics: penalizar (news viral = zero author replies)
+  if (tweet.source === 'trending') score -= 5
+
+  // HackerNews (tech relevance - bom para author replies)
+  if (tweet.source === 'hackernews') score += 20
 
   // Creator Inspiration (curado pelo algoritmo do X!)
   if (isCreatorInspiration) {
-    score += 25 // Curado = pré-validado
+    score += 25
 
-    // Tab "Most replies" = alta conversação = autor provavelmente responde comentários
-    // Reply que recebe reply do autor = 75x boost algorítmico!
     if (tweet.inspirationTab === 'replies') {
       score += 15
     }
   }
 
   // === BONUS POR AUTOR ENGAJADO ===
-  // Se verificamos que o autor costuma responder comentários
   if (tweet.authorEngagementScore !== undefined) {
     if (tweet.authorEngagementScore >= 5) {
-      score += 40 // Muito engajado - alta chance de 75x boost
+      score += 40
     } else if (tweet.authorEngagementScore >= 3) {
-      score += 25 // Engajado
+      score += 25
     } else if (tweet.authorEngagementScore >= 1) {
-      score += 10 // Algum engajamento
+      score += 10
     }
   }
 
-  // === SWEET SPOT: contas médias respondem mais ===
+  // === SWEET SPOT: contas menores respondem MUITO mais ===
   const likes = tweet.likes || 0
-  if (likes >= 10 && likes <= 500) score += 15   // Sweet spot: mais provável de responder
-  else if (likes > 5000) score -= 15              // Mega-conta: nunca responde
+  if (likes >= 5 && likes <= 100) score += 25       // Micro-creators: altíssima chance de responder
+  else if (likes > 100 && likes <= 500) score += 15  // Small creators: boa chance
+  else if (likes > 500 && likes <= 2000) score += 5   // Medium: ok
+  else if (likes > 5000) score -= 25                  // Mega-conta: nunca responde
 
-  // === NOVAS FONTES ===
+  // === FONTES PRIORIZADAS (onde autores respondem) ===
 
-  // Keyword Search (busca ativa, alta relevância)
+  // Keyword Search (busca ativa, alta relevância para indie/dev)
   if (tweet.source === 'keyword_search') {
-    score += 12
+    score += 20
   }
 
-  // Monitored Accounts (contas importantes que não seguimos)
+  // Monitored Accounts (contas curadas que provavelmente respondem)
   if (tweet.source === 'monitored_account') {
-    if (tweet.accountPriority === 'high') score += 25
-    else if (tweet.accountPriority === 'medium') score += 15
+    if (tweet.accountPriority === 'high') score += 35
+    else if (tweet.accountPriority === 'medium') score += 20
   }
 
-  // Hype Mode (alto engajamento fora do nicho)
+  // Hype Mode (alto engajamento)
   if (tweet.source === 'hype_mode') {
-    score += 35 // Alto engajamento compensa
-    if (tweet.isOutsideNiche) score -= 10 // Pequena penalidade por estar fora do nicho
+    score += 35
+    if (tweet.isOutsideNiche) score -= 10
   }
 
   // App Targeting (keywords dos MVPs ativos)
   if (tweet.source === 'app_targeting') {
-    score += 30 // Alto valor: pode converter em usuário do app
-    // Bonus extra para apps urgentes (recém-lançados)
+    score += 30
     if (tweet.targetAppDaysActive && tweet.targetAppDaysActive <= 3) {
       score += 15
     }
@@ -296,7 +319,7 @@ function calculateScore(tweet, config) {
 
   // Bonus se tweet matcha keyword de app (qualquer fonte)
   if (tweet.targetApp && tweet.source !== 'app_targeting') {
-    score += 15 // Match com targeting de app
+    score += 15
   }
 
   return Math.round(score)
@@ -1199,20 +1222,20 @@ export async function discoverTweets(maxTweets = 10, options = {}) {
     }
   }
 
-  // 5. Keyword Search (NOVO)
+  // 5. Keyword Search (prioridade alta - indie creators)
   if (useKeywordSearch) {
     try {
-      const tweets = await findTweetsFromKeywordSearch(5)
+      const tweets = await findTweetsFromKeywordSearch(8)
       allTweets.push(...tweets)
     } catch (e) {
       console.log('KeywordSearch erro:', e.message)
     }
   }
 
-  // 6. Monitored Accounts (NOVO)
+  // 6. Monitored Accounts (prioridade alta - contas que respondem)
   if (useMonitoredAccounts) {
     try {
-      const tweets = await findTweetsFromMonitoredAccounts(5)
+      const tweets = await findTweetsFromMonitoredAccounts(8)
       allTweets.push(...tweets)
     } catch (e) {
       console.log('MonitoredAccounts erro:', e.message)
