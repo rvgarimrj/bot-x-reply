@@ -13,8 +13,10 @@
 Sistema de engajamento automatizado no X (Twitter).
 
 ## 🎯 META: 500 Premium Followers
-- **Atual**: 28/500
+- **Atual**: 1.043/500 (meta atingida!)
+- **Verificados**: 162/2000
 - **Fórmula**: Author Reply (75x boost) → Visibilidade → Follow
+- **NOTA**: Valores anteriores (28-31) estavam errados - bug de parsing do analytics (fix 2026-02-08)
 
 ---
 
@@ -212,6 +214,55 @@ cat data/knowledge.json | jq '.replies | length'
 | Reply postado na aba errada | Fecha todas abas antes de postar + verifica URL (fix 2026-02-06) |
 | Reply em inglês pra tweet PT | Prompt reforçado + validação pós-geração `detectLanguage()` (fix 2026-02-06) |
 | Conflito horário c/ robô posts | Daemon evita ±3min de todos :00, R2R nos :07/:22/:37/:52 (fix 2026-02-06) |
+| Seguidores "1.04" (era 1040) | `extractNumber()` trata separador milhar PT-BR (fix 2026-02-08) |
+| 100% perguntas nos replies | Prompt reestruturado + daemon escolhe index por estilo (fix 2026-02-08) |
+| Daemon morto após daily-report | `restartDaemon()` usa `start-daemon.sh` em vez de `nohup node` (fix 2026-02-08) |
+| Followers pegava verified_followers | Seletor `a[href$="/followers"]` ignora links "verified" (fix 2026-02-08) |
+
+---
+
+## 🔧 Correções Relatório + Daemon (2026-02-08)
+
+### Problema 1: Seguidores "1.04" no relatório (era 1040+)
+
+**Causa:** `extractNumber("1.040")` retornava 1.04. Em PT-BR, ponto é separador de milhar.
+
+**Solução em `scripts/nightly-analytics.js`:**
+- Detecta padrão `\d+\.\d{3}` e remove pontos antes de parsear
+- Ambas cópias de `extractNumber` corrigidas (dentro e fora de `page.evaluate`)
+- Adicionado sanity check para saltos >500% em followers
+- Adicionado debug logging da fonte dos followers
+
+**NOTA**: Valores anteriores (28→31) também estavam errados - vinham do eixo do gráfico do analytics. O valor real sempre foi ~1000+.
+
+### Problema 2: 100% dos replies eram perguntas
+
+**Causa:** Prompt hardcodava "1. PERGUNTA genuína" e daemon sempre usava `replies[0]`.
+
+**Solução:**
+- `src/claude.js`: Pergunta movida para opção #3, opção #1 segue estilo sugerido
+- `scripts/auto-daemon.js`: Quando estilo=question, usa `replies[2]` (pergunta). Senão usa `replies[0]` (estilo)
+- **Resultado**: 41% perguntas (era 100%) - exatamente na meta de 40%
+
+### Problema 3: Daemon morria 8x por dia
+
+**Causa:** `restartDaemon()` no `daily-report.js` usava `nohup node ...` (PATH não existe no crontab). Resultado: daemon morto, `start-daemon.sh` sai com código 0, ninguém reinicia.
+
+**Solução em `scripts/daily-report.js`:**
+- Mata wrapper E node (`pkill -2 -f "start-daemon.sh"` + `pkill -2 -f "auto-daemon.js"`)
+- Reinicia via `start-daemon.sh` (garante PATH + auto-restart)
+- Aumentado sleep de 3s para 5s entre kill e restart
+
+### Problema 4: extractFollowersFromProfile pegava verified_followers
+
+**Causa:** Seletor `a[href*="/followers"]` matchava tanto `/followers` quanto `/verified_followers`. O primeiro link (verified=160) vencia.
+
+**Solução em `scripts/nightly-analytics.js`:**
+- Seletor alterado para `a[href$="/followers"]` (termina com, não contém)
+- Skip explícito de links com "verified" no href
+- Retorna objeto estruturado com `{ value, source, context }` para debug
+
+**Commit:** `3de48eb`
 
 ---
 
