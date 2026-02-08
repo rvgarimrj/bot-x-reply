@@ -383,8 +383,12 @@ async function runReplyCycle() {
         continue
       }
 
-      // Usa o primeiro reply (mais alinhado com estilo sugerido)
-      const reply = result.replies[0]
+      // Escolhe reply baseado no estilo sugerido
+      // Se estilo é question/pergunta, usa reply #3 (a pergunta)
+      // Senão, usa reply #1 (segue o estilo sugerido)
+      const isQuestionStyle = ['question', 'pergunta'].includes(result.suggestedStyle)
+      const replyIdx = isQuestionStyle && result.replies.length >= 3 ? 2 : 0
+      const reply = result.replies[replyIdx] || result.replies[0]
       const style = result.suggestedStyle
 
       console.log(`Reply gerado (${result.language}, estilo: ${style}):`)
@@ -413,7 +417,7 @@ async function runReplyCycle() {
           tweetAuthor: tweet.author,
           tweetText: tweet.text,
           replyText: reply,
-          replyIndex: 1,
+          replyIndex: replyIdx + 1,
           wasRecommended: true,
           source: tweet.source || 'unknown',
           language: result.language,

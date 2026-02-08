@@ -1159,21 +1159,24 @@ async function sendTelegramReport(message) {
 function restartDaemon() {
   console.log(`\n${COLORS.yellow}🔄 Reiniciando daemon...${COLORS.reset}`)
 
+  const projectDir = path.join(__dirname, '..')
+
   try {
-    // Para daemon atual
+    // Para wrapper E daemon (ambos precisam morrer)
+    execSync('pkill -2 -f "start-daemon.sh" 2>/dev/null || true', { stdio: 'inherit' })
     execSync('pkill -2 -f "auto-daemon.js" 2>/dev/null || true', { stdio: 'inherit' })
 
-    // Aguarda
-    execSync('sleep 3')
+    // Aguarda encerramento limpo
+    execSync('sleep 5')
 
-    // Inicia novo daemon em background
-    execSync('nohup node scripts/auto-daemon.js >> logs/auto-daemon.log 2>&1 &', {
-      cwd: path.join(__dirname, '..'),
+    // Inicia via wrapper (garante PATH correto e auto-restart em crash)
+    execSync(`nohup ${projectDir}/scripts/start-daemon.sh >> ${projectDir}/logs/auto-daemon.log 2>&1 &`, {
+      cwd: projectDir,
       stdio: 'ignore',
       detached: true
     })
 
-    console.log(`${COLORS.green}✅ Daemon reiniciado${COLORS.reset}`)
+    console.log(`${COLORS.green}✅ Daemon reiniciado via start-daemon.sh${COLORS.reset}`)
     return true
   } catch (e) {
     console.log(`${COLORS.red}❌ Erro ao reiniciar daemon: ${e.message}${COLORS.reset}`)

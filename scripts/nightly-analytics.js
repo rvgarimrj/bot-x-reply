@@ -84,18 +84,25 @@ async function extractFollowersFromProfile(browser) {
 
     const followers = await page.evaluate(() => {
       // Procura links de followers no perfil (ex: "31 Followers", "31 Seguidores")
-      const links = document.querySelectorAll('a[href*="/verified_followers"], a[href*="/followers"]')
+      // NOTA: Ignorar link de verified_followers (mostra número diferente)
+      const links = document.querySelectorAll('a[href$="/followers"]')
       for (const link of links) {
+        // Pula links de verified_followers
+        if (link.href.includes('verified')) continue
         const text = link.textContent.trim()
         const match = text.match(/^([\d,.]+[KMkm]?)\s/i)
-        if (match) return match[1]
+        if (match) return { value: match[1], source: 'followers_link', fullText: text }
       }
       // Fallback: busca no texto "N Following N Followers"
       const bodyText = document.body.innerText
       const match = bodyText.match(/(\d+(?:,\d+)*(?:\.\d+)?[KMkm]?)\s+(?:Followers|Seguidores)(?!\s+(?:ao longo|verificados))/i)
-      if (match) return match[1]
+      if (match) return { value: match[1], source: 'bodyText_regex', context: bodyText.substring(Math.max(0, match.index - 20), match.index + 50) }
       return null
     })
+
+    if (followers) {
+      console.log(`  Debug: followers source=${followers.source}, value="${followers.value}", context="${followers.fullText || followers.context || ''}"`)
+    }
 
     await page.close()
     return followers
@@ -114,9 +121,10 @@ async function collectAnalytics(browser) {
 
   // 1. Extrai followers do perfil (fonte confiável, não do analytics)
   console.log('  👤 Extraindo followers do perfil...')
-  const profileFollowers = await extractFollowersFromProfile(browser)
+  const profileFollowersResult = await extractFollowersFromProfile(browser)
+  const profileFollowers = profileFollowersResult?.value || null
   if (profileFollowers) {
-    console.log(`  ✅ Followers do perfil: ${profileFollowers}`)
+    console.log(`  ✅ Followers do perfil: ${profileFollowers} (source: ${profileFollowersResult.source})`)
   } else {
     console.log(`  ⚠️ Não foi possível extrair followers do perfil`)
   }
@@ -146,7 +154,13 @@ async function collectAnalytics(browser) {
 
       const extractNumber = (text) => {
         if (!text) return null
-        const clean = text.replace(/[^\d.KMkm]/g, '').trim()
+        // Handle PT-BR thousand separator: "1.040" means 1040, not 1.04
+        // Pattern: dot followed by exactly 3 digits (not K/M) = thousand separator
+        let clean = text.replace(/,/g, '').trim()
+        if (/^\d+\.\d{3}$/.test(clean.replace(/[KMkm]/gi, ''))) {
+          clean = clean.replace(/\./g, '') // Remove thousand separator dots
+        }
+        clean = clean.replace(/[^\d.KMkm]/g, '').trim()
         if (!clean) return null
         if (clean.toLowerCase().includes('k')) return parseFloat(clean) * 1000
         if (clean.toLowerCase().includes('m')) return parseFloat(clean) * 1000000
@@ -213,14 +227,31 @@ async function collectAnalytics(browser) {
     if (profileFollowers) {
       const extractNumber = (text) => {
         if (!text) return null
-        const clean = text.replace(/[^\d.KMkm]/g, '').trim()
+        // Handle PT-BR thousand separator: "1.040" means 1040, not 1.04
+        let clean = text.replace(/,/g, '').trim()
+        if (/^\d+\.\d{3}$/.test(clean.replace(/[KMkm]/gi, ''))) {
+          clean = clean.replace(/\./g, '')
+        }
+        clean = clean.replace(/[^\d.KMkm]/g, '').trim()
         if (!clean) return null
         if (clean.toLowerCase().includes('k')) return parseFloat(clean) * 1000
         if (clean.toLowerCase().includes('m')) return parseFloat(clean) * 1000000
         return parseFloat(clean) || null
       }
+      const parsedFollowers = extractNumber(profileFollowers)
       metrics.raw.followers = profileFollowers
-      metrics.parsed.followers = extractNumber(profileFollowers)
+      metrics.parsed.followers = parsedFollowers
+
+      // Sanity check: compare with previous entry
+      try {
+        const prevData = JSON.parse(fs.readFileSync(ANALYTICS_PATH, 'utf8'))
+        const prevEntries = prevData.entries || []
+        const prevFollowers = prevEntries.length > 0 ? prevEntries[prevEntries.length - 1].parsed?.followers : null
+        if (prevFollowers && parsedFollowers && Math.abs(parsedFollowers - prevFollowers) / prevFollowers > 5) {
+          console.log(`  ⚠️ SANITY CHECK: followers jumped from ${prevFollowers} to ${parsedFollowers} (>500% change) - marking as suspect`)
+          metrics.parsed.followersSuspect = true
+        }
+      } catch (e) { /* first run, no prev data */ }
     }
 
     // Screenshot para análise manual

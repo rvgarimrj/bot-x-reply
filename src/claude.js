@@ -340,13 +340,13 @@ ${languageInstruction}
 OBJETIVO: Fazer @${tweetAuthor} RESPONDER seu reply.
 
 Gere 3 replies CURTOS (máx 100 chars cada):
-1. PERGUNTA genuína sobre o tweet (obrigatório ter ?)
-2. REAÇÃO curta + pode ter pergunta
-3. OPINIÃO diferente ou humor
+1. Siga o ESTILO SUGERIDO acima (prioridade!)
+2. REAÇÃO curta ou opinião diferente
+3. PERGUNTA genuína sobre o tweet (obrigatório ter ?)
 
 IMPORTANTE:
 - MÁXIMO 100 caracteres por reply (corte se passar)
-- Pelo menos 1 DEVE ter pergunta (?)
+- Apenas o reply #3 DEVE ter pergunta (?). Os outros NÃO devem ter ? (a menos que o estilo peça)
 - NÃO dê informação, NÃO ensine, NÃO analise
 - Pareça curioso, não expert
 ${langInfo.language === 'pt' ? '- TODOS os 3 replies DEVEM ser em PORTUGUÊS. Proibido inglês.' : ''}
