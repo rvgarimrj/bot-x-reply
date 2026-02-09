@@ -242,11 +242,11 @@ async function collectAnalytics(browser) {
       metrics.raw.followers = profileFollowers
       metrics.parsed.followers = parsedFollowers
 
-      // Sanity check: compare with previous entry
+      // Sanity check: compare with last valid entry
       try {
         const prevData = JSON.parse(fs.readFileSync(ANALYTICS_PATH, 'utf8'))
-        const prevEntries = prevData.entries || []
-        const prevFollowers = prevEntries.length > 0 ? prevEntries[prevEntries.length - 1].parsed?.followers : null
+        const prevEntries = (prevData.entries || []).filter(e => e.parsed?.followers > 0)
+        const prevFollowers = prevEntries.length > 0 ? prevEntries[prevEntries.length - 1].parsed.followers : null
         if (prevFollowers && parsedFollowers && Math.abs(parsedFollowers - prevFollowers) / prevFollowers > 5) {
           console.log(`  ⚠️ SANITY CHECK: followers jumped from ${prevFollowers} to ${parsedFollowers} (>500% change) - marking as suspect`)
           metrics.parsed.followersSuspect = true

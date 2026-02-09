@@ -118,7 +118,7 @@ function analyzeGoalsProgress() {
 
   const current = latestEntry.parsed
   const currentFollowers = current.followers || 0
-  const verifiedFollowers = 156 // Do texto raw: "Seguidores verificados 156 / 1K"
+  const verifiedFollowers = current.verifiedFollowers || latestEntry.raw?.verifiedFollowers || 0
 
   // Calcula ganho de seguidores
   let followerGain = 0
@@ -126,14 +126,17 @@ function analyzeGoalsProgress() {
   const history = goalsData.history || []
 
   if (history.length > 0) {
-    const lastEntry = history[history.length - 1]
-    followerGain = currentFollowers - (lastEntry.followers || 0)
+    // Encontra a última entry com followers válido (não null)
+    const lastValid = [...history].reverse().find(h => h.followers && h.followers > 0)
+    if (lastValid && currentFollowers > 0) {
+      followerGain = currentFollowers - lastValid.followers
+    }
 
-    // Média dos últimos 7 dias
-    const last7 = history.slice(-7)
-    if (last7.length >= 2) {
-      const totalGain = currentFollowers - (last7[0].followers || currentFollowers)
-      avgDailyGain = totalGain / last7.length
+    // Média dos últimos 7 dias (só entries com followers válido)
+    const validHistory = history.filter(h => h.followers && h.followers > 0).slice(-7)
+    if (validHistory.length >= 2 && currentFollowers > 0) {
+      const totalGain = currentFollowers - validHistory[0].followers
+      avgDailyGain = totalGain / validHistory.length
     }
   }
 
@@ -799,12 +802,12 @@ function generateInsights(analysis, comparison) {
 
   // === IMPROVEMENTS para amanhã ===
 
-  // Se author reply rate baixo → mais perguntas
+  // Se author reply rate baixo → mais perguntas (max 40%, não mais)
   if (parseFloat(analysis.authorReplyRate) < 10) {
     insights.improvements.push({
       priority: 'high',
       area: 'engagement',
-      change: 'Aumentar questioning para 60%',
+      change: 'Manter questioning em 40%',
       reason: `Author reply rate de ${analysis.authorReplyRate}% está muito baixo`
     })
   }
