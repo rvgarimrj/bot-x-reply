@@ -146,7 +146,11 @@ function analyzeGoalsProgress() {
   let estimatedDate500 = null
   let status = 'critical'
 
-  if (avgDailyGain > 0) {
+  // Meta já atingida!
+  if (followersNeeded <= 0) {
+    status = 'achieved'
+    daysTo500 = 0
+  } else if (avgDailyGain > 0) {
     daysTo500 = Math.ceil(followersNeeded / avgDailyGain)
     const date = new Date()
     date.setDate(date.getDate() + daysTo500)
@@ -224,6 +228,7 @@ function formatGoalsSection(goals) {
   }
 
   const statusEmoji = {
+    achieved: '🏆',
     excellent: '🚀',
     good: '✅',
     slow: '🟡',
@@ -232,6 +237,7 @@ function formatGoalsSection(goals) {
   }
 
   const statusText = {
+    achieved: 'META ATINGIDA!',
     excellent: 'Excelente! Meta em menos de 30 dias',
     good: 'Bom ritmo, meta em ~60 dias',
     slow: 'Lento, meta em ~90 dias',
@@ -244,11 +250,18 @@ function formatGoalsSection(goals) {
   console += `\n  ${statusEmoji[goals.status]} STATUS: ${COLORS.bold}${statusText[goals.status]}${COLORS.reset}\n`
   console += `\n  📊 SEGUIDORES:\n`
   console += `     Atual: ${COLORS.bold}${goals.currentFollowers}${COLORS.reset} / 500 Premium\n`
-  console += `     Faltam: ${goals.followersNeeded}\n`
+
+  if (goals.status === 'achieved') {
+    console += `     ${COLORS.green}✅ Meta superada em ${Math.abs(goals.followersNeeded)} seguidores!${COLORS.reset}\n`
+  } else {
+    console += `     Faltam: ${goals.followersNeeded}\n`
+  }
   console += `     Ganho hoje: ${goals.followerGain >= 0 ? '+' : ''}${goals.followerGain}\n`
   console += `     Média/dia: ${goals.avgDailyGain >= 0 ? '+' : ''}${goals.avgDailyGain}\n`
 
-  if (goals.daysTo500) {
+  if (goals.status === 'achieved') {
+    console += `     ${COLORS.green}🏆 Próxima meta: 2000 verified followers (atual: ${goals.verifiedFollowers})${COLORS.reset}\n`
+  } else if (goals.daysTo500) {
     console += `     Previsão: ${goals.daysTo500} dias (${goals.estimatedDate500})\n`
   } else {
     console += `     Previsão: ${COLORS.red}NUNCA (sem crescimento)${COLORS.reset}\n`
@@ -265,14 +278,22 @@ function formatGoalsSection(goals) {
   let telegram = `\n🎯 <b>METAS DE MONETIZAÇÃO:</b>\n`
   telegram += `${statusEmoji[goals.status]} <b>${statusText[goals.status]}</b>\n\n`
   telegram += `📊 <b>Seguidores:</b> ${goals.currentFollowers}/500\n`
-  telegram += `• Faltam: ${goals.followersNeeded}\n`
-  telegram += `• Hoje: ${goals.followerGain >= 0 ? '+' : ''}${goals.followerGain}\n`
-  telegram += `• Média/dia: ${goals.avgDailyGain >= 0 ? '+' : ''}${goals.avgDailyGain}\n`
 
-  if (goals.daysTo500) {
-    telegram += `• Previsão: ${goals.daysTo500} dias\n`
+  if (goals.status === 'achieved') {
+    telegram += `• ✅ Meta superada em ${Math.abs(goals.followersNeeded)}!\n`
+    telegram += `• Hoje: ${goals.followerGain >= 0 ? '+' : ''}${goals.followerGain}\n`
+    telegram += `• Média/dia: ${goals.avgDailyGain >= 0 ? '+' : ''}${goals.avgDailyGain}\n`
+    telegram += `• 🎯 Próxima: ${goals.verifiedFollowers}/2000 verified\n`
   } else {
-    telegram += `• Previsão: ❌ NUNCA\n`
+    telegram += `• Faltam: ${goals.followersNeeded}\n`
+    telegram += `• Hoje: ${goals.followerGain >= 0 ? '+' : ''}${goals.followerGain}\n`
+    telegram += `• Média/dia: ${goals.avgDailyGain >= 0 ? '+' : ''}${goals.avgDailyGain}\n`
+
+    if (goals.daysTo500) {
+      telegram += `• Previsão: ${goals.daysTo500} dias\n`
+    } else {
+      telegram += `• Previsão: ❌ NUNCA\n`
+    }
   }
 
   telegram += `\n📈 <b>Impressões:</b> ${goals.impressionsOnTrack ? '✅' : '❌'} ${(goals.impressions || 0).toLocaleString()}/dia\n`
@@ -286,6 +307,17 @@ function formatGoalsSection(goals) {
  */
 function generateGoalBasedAdjustments(goalsProgress, analysis) {
   const adjustments = []
+
+  // Meta já atingida - foco em verified followers
+  if (goalsProgress.status === 'achieved') {
+    adjustments.push({
+      icon: '🏆',
+      priority: 'info',
+      message: `META 500 ATINGIDA! (${goalsProgress.currentFollowers} seguidores)`,
+      action: `Foco agora: ${goalsProgress.verifiedFollowers}/2000 verified followers`
+    })
+    return adjustments
+  }
 
   // STATUS CRÍTICO: Não estamos ganhando seguidores
   if (goalsProgress.status === 'critical' || goalsProgress.status === 'losing') {
@@ -713,23 +745,31 @@ function generateInsights(analysis, comparison) {
 
   // === LEARNINGS (o que o bot aprendeu) ===
 
-  // Melhor fonte
+  // Melhor fonte (sort by author replies, tiebreak by avg likes)
   const sources = Object.entries(analysis.bySource)
     .filter(([_, data]) => data.count >= 3)
     .map(([source, data]) => ({
       source,
       ...data,
+      avgLikes: data.count > 0 ? (data.likes / data.count) : 0,
       authorReplyRate: data.count > 0 ? ((data.authorReplies / data.count) * 100).toFixed(1) : 0
     }))
-    .sort((a, b) => parseFloat(b.authorReplyRate) - parseFloat(a.authorReplyRate))
+    .sort((a, b) => {
+      const arDiff = parseFloat(b.authorReplyRate) - parseFloat(a.authorReplyRate)
+      if (arDiff !== 0) return arDiff
+      return b.avgLikes - a.avgLikes
+    })
 
   if (sources.length > 0) {
     const best = sources[0]
     const worst = sources[sources.length - 1]
+    const sourceMetric = parseFloat(best.authorReplyRate) > 0
+      ? `${best.authorReplyRate}% author replies`
+      : `${best.avgLikes.toFixed(1)} avg likes`
     insights.learnings.push({
       icon: '📊',
       type: 'source',
-      message: `Melhor fonte: "${best.source}" (${best.authorReplyRate}% author replies)`,
+      message: `Melhor fonte: "${best.source}" (${sourceMetric})`,
       data: best
     })
     if (sources.length > 1 && parseFloat(best.authorReplyRate) > parseFloat(worst.authorReplyRate) * 2) {
@@ -742,18 +782,27 @@ function generateInsights(analysis, comparison) {
     }
   }
 
-  // Melhor horário
+  // Melhor horário (sort by author replies, tiebreak by avg likes)
   const hours = Object.entries(analysis.byHour)
     .filter(([_, data]) => data.count >= 2)
     .map(([hour, data]) => ({
       hour: parseInt(hour),
       ...data,
+      avgLikes: data.count > 0 ? (data.likes / data.count) : 0,
       authorReplyRate: data.count > 0 ? ((data.authorReplies / data.count) * 100).toFixed(1) : 0
     }))
-    .sort((a, b) => parseFloat(b.authorReplyRate) - parseFloat(a.authorReplyRate))
+    .sort((a, b) => {
+      const arDiff = parseFloat(b.authorReplyRate) - parseFloat(a.authorReplyRate)
+      if (arDiff !== 0) return arDiff
+      return b.avgLikes - a.avgLikes
+    })
 
   if (hours.length >= 3) {
-    const topHours = hours.slice(0, 3).map(h => `${h.hour}h`)
+    const hasAuthorReplies = hours.some(h => parseFloat(h.authorReplyRate) > 0)
+    const topHours = hours.slice(0, 3).map(h => {
+      const metric = hasAuthorReplies ? `${h.authorReplyRate}% AR` : `${h.avgLikes.toFixed(1)} likes`
+      return `${h.hour}h (${metric})`
+    })
     insights.learnings.push({
       icon: '⏰',
       type: 'timing',
@@ -762,22 +811,30 @@ function generateInsights(analysis, comparison) {
     })
   }
 
-  // Melhor estilo
+  // Melhor estilo (sort by author replies, tiebreak by avg likes)
   const styles = Object.entries(analysis.byStyle)
     .filter(([_, data]) => data.count >= 3)
     .map(([style, data]) => ({
       style,
       ...data,
+      avgLikes: data.count > 0 ? (data.likes / data.count) : 0,
       authorReplyRate: data.count > 0 ? ((data.authorReplies / data.count) * 100).toFixed(1) : 0
     }))
-    .sort((a, b) => parseFloat(b.authorReplyRate) - parseFloat(a.authorReplyRate))
+    .sort((a, b) => {
+      const arDiff = parseFloat(b.authorReplyRate) - parseFloat(a.authorReplyRate)
+      if (arDiff !== 0) return arDiff
+      return b.avgLikes - a.avgLikes
+    })
 
   if (styles.length > 0) {
     const best = styles[0]
+    const styleMetric = parseFloat(best.authorReplyRate) > 0
+      ? `${best.authorReplyRate}% author replies`
+      : `${best.avgLikes.toFixed(1)} avg likes`
     insights.learnings.push({
       icon: '🎨',
       type: 'style',
-      message: `Melhor estilo: "${best.style}" (${best.authorReplyRate}% author replies)`,
+      message: `Melhor estilo: "${best.style}" (${styleMetric})`,
       data: best
     })
   }

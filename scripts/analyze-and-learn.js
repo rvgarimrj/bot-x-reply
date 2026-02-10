@@ -115,7 +115,11 @@ function analyzeHourPerformance(knowledge) {
     })
   }
 
-  return analysis.sort((a, b) => parseFloat(b.authorReplyRate) - parseFloat(a.authorReplyRate))
+  return analysis.sort((a, b) => {
+    const arDiff = parseFloat(b.authorReplyRate) - parseFloat(a.authorReplyRate)
+    if (arDiff !== 0) return arDiff
+    return parseFloat(b.avgLikes) - parseFloat(a.avgLikes)
+  })
 }
 
 /**
@@ -150,7 +154,11 @@ function analyzeStylePerformance(knowledge) {
     })
   }
 
-  return analysis.sort((a, b) => parseFloat(b.authorReplyRate) - parseFloat(a.authorReplyRate))
+  return analysis.sort((a, b) => {
+    const arDiff = parseFloat(b.authorReplyRate) - parseFloat(a.authorReplyRate)
+    if (arDiff !== 0) return arDiff
+    return parseFloat(b.avgLikes) - parseFloat(a.avgLikes)
+  })
 }
 
 /**
