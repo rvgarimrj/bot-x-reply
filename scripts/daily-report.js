@@ -30,6 +30,7 @@ import {
   rankHoursByPerformance,
   rankDaysByPerformance,
   compareWithConfig,
+  applyAdjustments as applyHourAdjustments,
   generateTelegramSection as generateHoursTelegramSection
 } from './validate-hours.js'
 
@@ -191,9 +192,10 @@ function analyzeGoalsProgress() {
     estimatedDate500,
     status,
     followersNeeded,
-    impressions: current.impressions,
+    impressions7d: current.impressions,
+    impressionsDaily: Math.round((current.impressions || 0) / 7),
     impressionsGoalDaily: MONETIZATION_GOALS.dailyImpressions,
-    impressionsOnTrack: (current.impressions || 0) >= MONETIZATION_GOALS.dailyImpressions
+    impressionsOnTrack: Math.round((current.impressions || 0) / 7) >= MONETIZATION_GOALS.dailyImpressions
   }
 
   // Salva
@@ -208,8 +210,9 @@ function analyzeGoalsProgress() {
     daysTo500,
     estimatedDate500,
     status,
-    impressions: current.impressions,
-    impressionsOnTrack: (current.impressions || 0) >= MONETIZATION_GOALS.dailyImpressions,
+    impressions7d: current.impressions,
+    impressionsDaily: Math.round((current.impressions || 0) / 7),
+    impressionsOnTrack: Math.round((current.impressions || 0) / 7) >= MONETIZATION_GOALS.dailyImpressions,
     engagementRate: current.engagementRate,
     profileVisits: current.profileVisits,
     history: history.slice(-7)
@@ -268,7 +271,8 @@ function formatGoalsSection(goals) {
   }
 
   console += `\n  📈 IMPRESSÕES:\n`
-  console += `     Hoje: ${(goals.impressions || 0).toLocaleString()}\n`
+  console += `     7 dias: ${(goals.impressions7d || 0).toLocaleString()}\n`
+  console += `     Média/dia: ${(goals.impressionsDaily || 0).toLocaleString()}\n`
   console += `     Meta/dia: ${MONETIZATION_GOALS.dailyImpressions.toLocaleString()}\n`
   console += `     Status: ${goals.impressionsOnTrack ? '✅ No caminho' : '❌ Abaixo'}\n`
 
@@ -296,7 +300,7 @@ function formatGoalsSection(goals) {
     }
   }
 
-  telegram += `\n📈 <b>Impressões:</b> ${goals.impressionsOnTrack ? '✅' : '❌'} ${(goals.impressions || 0).toLocaleString()}/dia\n`
+  telegram += `\n📈 <b>Impressões:</b> ${goals.impressionsOnTrack ? '✅' : '❌'} ${(goals.impressionsDaily || 0).toLocaleString()}/dia (${(goals.impressions7d || 0).toLocaleString()}/7d)\n`
 
   return { console, telegram }
 }
@@ -1358,6 +1362,15 @@ async function main() {
     }
     if (discrepancies.suggestions.length > 0) {
       console.log(`   ${COLORS.yellow}⚠️ ${discrepancies.suggestions.length} ajustes sugeridos!${COLORS.reset}`)
+    }
+
+    // Aplica ajustes de horários automaticamente
+    if (!dryRun && discrepancies.suggestions.length > 0 && totalSamples >= 20) {
+      const { updated, changes, config } = applyHourAdjustments(discrepancies, peakConfig)
+      if (updated) {
+        saveJSON(PEAK_HOURS_PATH, config)
+        console.log(`   ${COLORS.green}✅ Horários atualizados: ${changes.join(', ')}${COLORS.reset}`)
+      }
     }
 
     hoursTelegramSection = generateHoursTelegramSection(rankedHours, rankedDays, discrepancies)

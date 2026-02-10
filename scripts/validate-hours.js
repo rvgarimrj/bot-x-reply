@@ -536,6 +536,7 @@ export {
   rankHoursByPerformance,
   rankDaysByPerformance,
   compareWithConfig,
+  applyAdjustments,
   generateTelegramSection
 }
 
