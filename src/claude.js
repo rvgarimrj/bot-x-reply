@@ -245,19 +245,31 @@ Pelo menos 1 das 3 DEVE ter pergunta (?)`
 export function detectLanguage(text) {
   const lowerText = text.toLowerCase()
 
+  // Deaccent text for EN matching - JS \b treats accented chars as non-word,
+  // so "tecnología" falsely matches \ba\b (the trailing "a" after í)
+  const deaccentedText = lowerText
+    .replace(/[áàâã]/g, 'a').replace(/[éèê]/g, 'e').replace(/[íìî]/g, 'i')
+    .replace(/[óòôõ]/g, 'o').replace(/[úùû]/g, 'u').replace(/ñ/g, 'n').replace(/ç/g, 'c')
+
   // Caracteres e padrões exclusivos de cada idioma
   const ptIndicators = [
     /[ãõç]/g,
-    /\b(você|vocês|não|então|também|já|até|depois|porque|porquê|está|estão|são|foi|foram|muito|pouco|aqui|ali|agora|ainda|sempre|nunca|nada|tudo|isso|este|esta|esse|essa|esses|essas|dele|dela|nosso|nossa|seu|sua|meu|minha|fazer|faz|feito|ter|tem|tinha|tenho|ser|sou|era|foi|ir|vai|vamos|vou|ver|vejo|dar|dá|dou|ficar|fica|ficou|querer|quer|quero|poder|pode|posso|dever|deve|devo|precisar|preciso|saber|sei|sabia|achar|acho|achei|pensar|penso|pensei|olhar|olha|olho|falar|falo|falou|dizer|diz|disse|entender|entendo|entendi)\b/gi
+    /\b(você|vocês|não|então|também|já|até|depois|porque|porquê|está|estão|são|foi|foram|muito|pouco|aqui|ali|agora|ainda|sempre|nunca|nada|tudo|isso|este|esta|esse|essa|esses|essas|dele|dela|nosso|nossa|seu|sua|meu|minha|fazer|faz|feito|ter|tem|tinha|tenho|ser|sou|era|foi|ir|vai|vamos|vou|ver|vejo|dar|dá|dou|ficar|fica|ficou|querer|quer|quero|poder|pode|posso|dever|deve|devo|precisar|preciso|saber|sei|sabia|achar|acho|achei|pensar|penso|pensei|olhar|olha|olho|falar|falo|falou|dizer|diz|disse|entender|entendo|entendi)\b/gi,
+    // Common PT function words (articles, prepositions, conjunctions)
+    /\b(o|os|as|um|uma|do|da|dos|das|ao|no|na|nos|nas|em|de|com|sem|por|que|se|como|mais|mas|ou|e|ele|ela|eles|elas|lhe|lhes|para|pra|nem|onde|quando)\b/gi
   ]
 
   const esIndicators = [
     /[ñ¿¡]/g,
-    /\b(usted|ustedes|también|entonces|después|ahora|siempre|nunca|nada|todo|esto|este|esta|ese|esa|esos|esas|aquel|aquella|suyo|suya|nuestro|nuestra|hacer|hago|hecho|tener|tiene|tengo|tenía|ser|soy|era|fue|ir|va|vamos|voy|ver|veo|dar|doy|quedar|queda|quedó|querer|quiere|quiero|poder|puede|puedo)\b/gi
+    /\b(usted|ustedes|también|entonces|después|ahora|siempre|nunca|nada|todo|esto|este|esta|ese|esa|esos|esas|aquel|aquella|suyo|suya|nuestro|nuestra|hacer|hago|hecho|tener|tiene|tengo|tenía|ser|soy|era|fue|ir|va|vamos|voy|ver|veo|dar|doy|quedar|queda|quedó|querer|quiere|quiero|poder|puede|puedo)\b/gi,
+    // Common ES function words (articles, prepositions, conjunctions)
+    /\b(el|la|los|las|un|una|del|al|lo|le|les|nos|su|sus|no|de|en|es|por|que|se|como|con|sin|pero|muy|hay|ya|ni|si|son|donde|cuando|entre|sobre|hacia|desde|hasta|otro|otra|otros|otras|mismo|misma|cada|mucho|mucha|poco|poca|mejor|peor|hoy|gratis|porque|pensar|creer|decir|hablar|llamar|parecer|sentir)\b/gi
   ]
 
   const enIndicators = [
-    /\b(the|a|an|is|are|was|were|been|being|have|has|had|having|do|does|did|doing|will|would|could|should|may|might|must|can|this|that|these|those|what|which|who|whom|whose|where|when|why|how|if|then|else|because|although|while|during|before|after|about|between|against|through|with|without|for|from|into|onto|upon|within|among|towards)\b/gi
+    /\b(the|a|an|is|are|was|were|been|being|have|has|had|having|do|does|did|doing|will|would|could|should|may|might|must|can|this|that|these|those|what|which|who|whom|whose|where|when|why|how|if|then|else|because|although|while|during|before|after|about|between|against|through|with|without|for|from|into|onto|upon|within|among|towards)\b/gi,
+    // Common EN-only pronouns/adverbs (don't overlap with ES/PT)
+    /\b(it|to|you|your|my|he|she|they|them|we|us|our|not|just|but|or|so|very|too|only|also|like|than|really|pretty|still|even|much|many|some|any|every|such|both|other)\b/gi
   ]
 
   // Conta indicadores
@@ -273,8 +285,9 @@ export function detectLanguage(text) {
     esScore += (lowerText.match(pattern) || []).length
   }
 
+  // Use deaccented text for EN to avoid false matches from accented chars
   for (const pattern of enIndicators) {
-    enScore += (lowerText.match(pattern) || []).length
+    enScore += (deaccentedText.match(pattern) || []).length
   }
 
   // Boost para caracteres exclusivos
@@ -368,7 +381,9 @@ Apenas as 3 opções numeradas:`
     if (langInfo.language !== 'en' && replies.length > 0) {
       const filtered = replies.filter(r => {
         const replyLang = detectLanguage(r)
-        return replyLang.language === langInfo.language || replyLang.confidence === 'low'
+        // Keep if: matches target lang OR truly ambiguous (no EN words detected)
+        return replyLang.language === langInfo.language ||
+               (replyLang.confidence === 'low' && replyLang.scores.en === 0)
       })
       if (filtered.length > 0) {
         replies = filtered
