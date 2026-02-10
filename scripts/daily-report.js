@@ -121,19 +121,34 @@ function analyzeGoalsProgress() {
   const currentFollowers = current.followers || 0
   const verifiedFollowers = current.verifiedFollowers || latestEntry.raw?.verifiedFollowers || 0
 
-  // Calcula ganho de seguidores
+  // Calcula ganho de verified followers (Premium followers = verified followers no X)
+  // A meta de 500 é de PREMIUM followers, não total!
+  let verifiedGain = 0
+  let avgDailyVerifiedGain = 0
   let followerGain = 0
   let avgDailyGain = 0
   const history = goalsData.history || []
 
   if (history.length > 0) {
-    // Encontra a última entry com followers válido (não null)
+    // Ganho de verified followers
+    const lastValidVerified = [...history].reverse().find(h => h.verifiedFollowers && h.verifiedFollowers > 0)
+    if (lastValidVerified && verifiedFollowers > 0) {
+      verifiedGain = verifiedFollowers - lastValidVerified.verifiedFollowers
+    }
+
+    // Média verified dos últimos 7 dias
+    const validVerifiedHistory = history.filter(h => h.verifiedFollowers && h.verifiedFollowers > 0).slice(-7)
+    if (validVerifiedHistory.length >= 2 && verifiedFollowers > 0) {
+      const totalVerifiedGain = verifiedFollowers - validVerifiedHistory[0].verifiedFollowers
+      avgDailyVerifiedGain = totalVerifiedGain / validVerifiedHistory.length
+    }
+
+    // Ganho de total followers (para referência)
     const lastValid = [...history].reverse().find(h => h.followers && h.followers > 0)
     if (lastValid && currentFollowers > 0) {
       followerGain = currentFollowers - lastValid.followers
     }
 
-    // Média dos últimos 7 dias (só entries com followers válido)
     const validHistory = history.filter(h => h.followers && h.followers > 0).slice(-7)
     if (validHistory.length >= 2 && currentFollowers > 0) {
       const totalGain = currentFollowers - validHistory[0].followers
@@ -141,18 +156,18 @@ function analyzeGoalsProgress() {
     }
   }
 
-  // Calcula projeções
-  const followersNeeded = MONETIZATION_GOALS.premiumFollowers - currentFollowers
+  // Calcula projeções baseado em VERIFIED followers (a meta real!)
+  const premiumNeeded = MONETIZATION_GOALS.premiumFollowers - verifiedFollowers
+  const verifiedNeeded = MONETIZATION_GOALS.verifiedFollowers - verifiedFollowers
   let daysTo500 = null
   let estimatedDate500 = null
   let status = 'critical'
 
-  // Meta já atingida!
-  if (followersNeeded <= 0) {
+  if (premiumNeeded <= 0) {
     status = 'achieved'
     daysTo500 = 0
-  } else if (avgDailyGain > 0) {
-    daysTo500 = Math.ceil(followersNeeded / avgDailyGain)
+  } else if (avgDailyVerifiedGain > 0) {
+    daysTo500 = Math.ceil(premiumNeeded / avgDailyVerifiedGain)
     const date = new Date()
     date.setDate(date.getDate() + daysTo500)
     estimatedDate500 = date.toISOString().split('T')[0]
@@ -161,7 +176,7 @@ function analyzeGoalsProgress() {
     else if (daysTo500 <= 60) status = 'good'
     else if (daysTo500 <= 90) status = 'slow'
     else status = 'critical'
-  } else if (avgDailyGain < 0) {
+  } else if (avgDailyVerifiedGain < 0) {
     status = 'losing'
   }
 
@@ -187,11 +202,13 @@ function analyzeGoalsProgress() {
     lastCalculated: new Date().toISOString(),
     currentFollowers,
     verifiedFollowers,
+    premiumNeeded,
+    verifiedNeeded,
+    avgDailyVerifiedGain: avgDailyVerifiedGain.toFixed(1),
     avgDailyGain: avgDailyGain.toFixed(1),
     daysTo500,
     estimatedDate500,
     status,
-    followersNeeded,
     impressions7d: current.impressions,
     impressionsDaily: Math.round((current.impressions || 0) / 7),
     impressionsGoalDaily: MONETIZATION_GOALS.dailyImpressions,
@@ -204,7 +221,10 @@ function analyzeGoalsProgress() {
   return {
     currentFollowers,
     verifiedFollowers,
-    followersNeeded,
+    premiumNeeded,
+    verifiedNeeded,
+    verifiedGain,
+    avgDailyVerifiedGain,
     followerGain,
     avgDailyGain,
     daysTo500,
@@ -249,59 +269,57 @@ function formatGoalsSection(goals) {
   }
 
   // Console
-  let console = `\n${COLORS.bold}${COLORS.magenta}━━━ 🎯 PROGRESSO DAS METAS ━━━${COLORS.reset}\n`
+  let console = `\n${COLORS.bold}${COLORS.magenta}━━━ 🎯 METAS DE MONETIZAÇÃO ━━━${COLORS.reset}\n`
   console += `\n  ${statusEmoji[goals.status]} STATUS: ${COLORS.bold}${statusText[goals.status]}${COLORS.reset}\n`
-  console += `\n  📊 SEGUIDORES:\n`
-  if (goals.status === 'achieved') {
-    console += `     Total: ${COLORS.bold}${goals.currentFollowers}${COLORS.reset} (meta de 500 atingida!)\n`
-    console += `     Verified: ${COLORS.bold}${goals.verifiedFollowers}${COLORS.reset} / 2000 (próxima meta)\n`
-  } else {
-    console += `     Atual: ${COLORS.bold}${goals.currentFollowers}${COLORS.reset} / 500 Premium\n`
-  }
 
-  if (goals.status !== 'achieved') {
-    console += `     Faltam: ${goals.followersNeeded}\n`
-  }
-  console += `     Ganho hoje: ${goals.followerGain >= 0 ? '+' : ''}${goals.followerGain}\n`
-  console += `     Média/dia: ${goals.avgDailyGain >= 0 ? '+' : ''}${goals.avgDailyGain}\n`
-
+  // Meta 1: 500 Premium followers (Partilha de Receitas)
+  console += `\n  📊 PREMIUM FOLLOWERS (Partilha de Receitas):\n`
+  console += `     Verified: ${COLORS.bold}${goals.verifiedFollowers}${COLORS.reset} / 500\n`
+  console += `     Faltam: ${goals.premiumNeeded > 0 ? goals.premiumNeeded : 0}\n`
+  console += `     Ganho hoje: ${goals.verifiedGain >= 0 ? '+' : ''}${goals.verifiedGain}\n`
+  console += `     Média/dia: ${goals.avgDailyVerifiedGain >= 0 ? '+' : ''}${goals.avgDailyVerifiedGain}\n`
   if (goals.status === 'achieved') {
-    // proxima meta ja mostrada acima
+    console += `     ${COLORS.green}✅ Meta atingida!${COLORS.reset}\n`
   } else if (goals.daysTo500) {
     console += `     Previsão: ${goals.daysTo500} dias (${goals.estimatedDate500})\n`
   } else {
-    console += `     Previsão: ${COLORS.red}NUNCA (sem crescimento)${COLORS.reset}\n`
+    console += `     Previsão: ${COLORS.red}Sem dados suficientes${COLORS.reset}\n`
   }
 
-  console += `\n  📈 IMPRESSÕES:\n`
+  // Meta 2: 2000 Verified followers (Subscrições)
+  console += `\n  🔓 VERIFIED FOLLOWERS (Subscrições):\n`
+  console += `     Verified: ${COLORS.bold}${goals.verifiedFollowers}${COLORS.reset} / 2000\n`
+  console += `     Faltam: ${goals.verifiedNeeded > 0 ? goals.verifiedNeeded : 0}\n`
+
+  // Total followers (referência)
+  console += `\n  👥 TOTAL FOLLOWERS: ${goals.currentFollowers}\n`
+
+  // Impressões
+  console += `\n  📈 IMPRESSÕES (5M em 3 meses):\n`
   console += `     7 dias: ${(goals.impressions7d || 0).toLocaleString()}\n`
   console += `     Média/dia: ${(goals.impressionsDaily || 0).toLocaleString()}\n`
   console += `     Meta/dia: ${MONETIZATION_GOALS.dailyImpressions.toLocaleString()}\n`
   console += `     Status: ${goals.impressionsOnTrack ? '✅ No caminho' : '❌ Abaixo'}\n`
 
-  console += `\n  🔓 VERIFIED FOLLOWERS: ${goals.verifiedFollowers} / 2000\n`
-
+  // Telegram
   // Telegram
   let telegram = `\n🎯 <b>METAS DE MONETIZAÇÃO:</b>\n`
-  telegram += `${statusEmoji[goals.status]} <b>${statusText[goals.status]}</b>\n\n`
-  if (goals.status === 'achieved') {
-    telegram += `📊 <b>Seguidores:</b> ${goals.currentFollowers}\n`
-    telegram += `• ✅ Meta de 500 atingida!\n`
-    telegram += `• Verified: ${goals.verifiedFollowers}/2000 (próxima meta)\n`
-    telegram += `• Hoje: ${goals.followerGain >= 0 ? '+' : ''}${goals.followerGain}\n`
-  } else {
-    telegram += `📊 <b>Seguidores:</b> ${goals.currentFollowers}/500\n`
-    telegram += `• Faltam: ${goals.followersNeeded}\n`
-    telegram += `• Hoje: ${goals.followerGain >= 0 ? '+' : ''}${goals.followerGain}\n`
-    telegram += `• Média/dia: ${goals.avgDailyGain >= 0 ? '+' : ''}${goals.avgDailyGain}\n`
 
-    if (goals.daysTo500) {
-      telegram += `• Previsão: ${goals.daysTo500} dias\n`
-    } else {
-      telegram += `• Previsão: ❌ NUNCA\n`
-    }
+  // Premium followers (meta principal)
+  telegram += `\n📊 <b>Premium Followers:</b> ${goals.verifiedFollowers}/500\n`
+  telegram += `• Faltam: ${goals.premiumNeeded > 0 ? goals.premiumNeeded : 0}\n`
+  telegram += `• Hoje: ${goals.verifiedGain >= 0 ? '+' : ''}${goals.verifiedGain}\n`
+  if (goals.daysTo500) {
+    telegram += `• Previsão: ${goals.daysTo500} dias\n`
   }
 
+  // Verified followers (segunda meta)
+  telegram += `\n🔓 <b>Verified Followers:</b> ${goals.verifiedFollowers}/2000\n`
+
+  // Total (referência)
+  telegram += `\n👥 <b>Total:</b> ${goals.currentFollowers}\n`
+
+  // Impressões
   telegram += `\n📈 <b>Impressões:</b> ${goals.impressionsOnTrack ? '✅' : '❌'} ${(goals.impressionsDaily || 0).toLocaleString()}/dia (${(goals.impressions7d || 0).toLocaleString()}/7d)\n`
 
   return { console, telegram }
@@ -314,23 +332,23 @@ function formatGoalsSection(goals) {
 function generateGoalBasedAdjustments(goalsProgress, analysis) {
   const adjustments = []
 
-  // Meta já atingida - foco em verified followers
+  // Meta já atingida
   if (goalsProgress.status === 'achieved') {
     adjustments.push({
       icon: '🏆',
       priority: 'info',
-      message: `META 500 ATINGIDA! (${goalsProgress.currentFollowers} seguidores)`,
-      action: `Foco agora: ${goalsProgress.verifiedFollowers}/2000 verified followers`
+      message: `META 500 Premium followers ATINGIDA! (${goalsProgress.verifiedFollowers} verified)`,
+      action: `Próximo: ${goalsProgress.verifiedFollowers}/2000 verified + 5M impressões`
     })
     return adjustments
   }
 
-  // STATUS CRÍTICO: Não estamos ganhando seguidores
+  // STATUS CRÍTICO: Não estamos ganhando verified followers
   if (goalsProgress.status === 'critical' || goalsProgress.status === 'losing') {
     adjustments.push({
       icon: '🔴',
       priority: 'critical',
-      message: 'CRÍTICO: Sem crescimento de seguidores!',
+      message: `CRÍTICO: ${goalsProgress.verifiedFollowers}/500 premium followers, sem crescimento!`,
       action: 'Precisamos de author replies para boost algorítmico'
     })
 
@@ -393,33 +411,33 @@ function generateGoalBasedAdjustments(goalsProgress, analysis) {
     })
   }
 
-  // Sugestões baseadas no ganho diário
-  if (goalsProgress.followerGain < 0) {
+  // Sugestões baseadas no ganho diário de verified
+  if (goalsProgress.verifiedGain < 0) {
     adjustments.push({
       icon: '💀',
       priority: 'critical',
-      message: `PERDEMOS ${Math.abs(goalsProgress.followerGain)} seguidores hoje!`,
+      message: `PERDEMOS ${Math.abs(goalsProgress.verifiedGain)} verified followers hoje!`,
       action: 'Revisar urgentemente: replies podem estar parecendo spam/bot'
     })
-  } else if (goalsProgress.followerGain === 0) {
+  } else if (goalsProgress.verifiedGain === 0) {
     adjustments.push({
       icon: '⚠️',
       priority: 'high',
-      message: 'Zero novos seguidores hoje',
+      message: 'Zero novos verified followers hoje',
       action: 'Focar em tweets de autores que respondem comments'
     })
-  } else if (goalsProgress.followerGain > 0 && goalsProgress.followerGain < MONETIZATION_GOALS.dailyFollowerGain) {
+  } else if (goalsProgress.verifiedGain > 0 && goalsProgress.verifiedGain < MONETIZATION_GOALS.dailyFollowerGain) {
     adjustments.push({
       icon: '📈',
       priority: 'medium',
-      message: `+${goalsProgress.followerGain} seguidores (meta: +${MONETIZATION_GOALS.dailyFollowerGain}/dia)`,
+      message: `+${goalsProgress.verifiedGain} verified (meta: +${MONETIZATION_GOALS.dailyFollowerGain}/dia)`,
       action: 'Bom progresso, mas pode melhorar'
     })
-  } else if (goalsProgress.followerGain >= MONETIZATION_GOALS.dailyFollowerGain) {
+  } else if (goalsProgress.verifiedGain >= MONETIZATION_GOALS.dailyFollowerGain) {
     adjustments.push({
       icon: '🚀',
       priority: 'info',
-      message: `EXCELENTE! +${goalsProgress.followerGain} seguidores hoje!`,
+      message: `EXCELENTE! +${goalsProgress.verifiedGain} verified followers hoje!`,
       action: 'Manter estratégia atual!'
     })
   }
