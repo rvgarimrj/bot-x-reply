@@ -12,11 +12,20 @@
 
 Sistema de engajamento automatizado no X (Twitter).
 
-## 🎯 META: 500 Premium Followers
-- **Atual**: 1.043/500 (meta atingida!)
-- **Verificados**: 162/2000
+## 🎯 METAS DE MONETIZAÇÃO
+
+### Requisitos do X (Estúdio do Criador)
+| Meta | Requisito | Atual | Status |
+|------|-----------|-------|--------|
+| Partilha de Receitas | 500 Premium followers | 165 | ❌ Faltam 335 |
+| Subscrições | 2.000 verified followers | 165 | ❌ Faltam 1.835 |
+| Impressões | 5M em 3 meses | ~16K/dia (meta: ~55K/dia) | ❌ |
+
+- **Total de seguidores**: 1.043 (NÃO conta para monetização)
+- **Premium followers = Verified followers** = seguidores com X Premium (checkmark azul)
 - **Fórmula**: Author Reply (75x boost) → Visibilidade → Follow
 - **NOTA**: Valores anteriores (28-31) estavam errados - bug de parsing do analytics (fix 2026-02-08)
+- **NOTA**: "Premium followers" NÃO é total de seguidores. É o número de seguidores que têm assinatura X Premium.
 
 ---
 
