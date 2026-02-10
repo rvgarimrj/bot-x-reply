@@ -252,18 +252,21 @@ function formatGoalsSection(goals) {
   let console = `\n${COLORS.bold}${COLORS.magenta}━━━ 🎯 PROGRESSO DAS METAS ━━━${COLORS.reset}\n`
   console += `\n  ${statusEmoji[goals.status]} STATUS: ${COLORS.bold}${statusText[goals.status]}${COLORS.reset}\n`
   console += `\n  📊 SEGUIDORES:\n`
-  console += `     Atual: ${COLORS.bold}${goals.currentFollowers}${COLORS.reset} / 500 Premium\n`
-
   if (goals.status === 'achieved') {
-    console += `     ${COLORS.green}✅ Meta superada em ${Math.abs(goals.followersNeeded)} seguidores!${COLORS.reset}\n`
+    console += `     Total: ${COLORS.bold}${goals.currentFollowers}${COLORS.reset} (meta de 500 atingida!)\n`
+    console += `     Verified: ${COLORS.bold}${goals.verifiedFollowers}${COLORS.reset} / 2000 (próxima meta)\n`
   } else {
+    console += `     Atual: ${COLORS.bold}${goals.currentFollowers}${COLORS.reset} / 500 Premium\n`
+  }
+
+  if (goals.status !== 'achieved') {
     console += `     Faltam: ${goals.followersNeeded}\n`
   }
   console += `     Ganho hoje: ${goals.followerGain >= 0 ? '+' : ''}${goals.followerGain}\n`
   console += `     Média/dia: ${goals.avgDailyGain >= 0 ? '+' : ''}${goals.avgDailyGain}\n`
 
   if (goals.status === 'achieved') {
-    console += `     ${COLORS.green}🏆 Próxima meta: 2000 verified followers (atual: ${goals.verifiedFollowers})${COLORS.reset}\n`
+    // proxima meta ja mostrada acima
   } else if (goals.daysTo500) {
     console += `     Previsão: ${goals.daysTo500} dias (${goals.estimatedDate500})\n`
   } else {
@@ -281,14 +284,13 @@ function formatGoalsSection(goals) {
   // Telegram
   let telegram = `\n🎯 <b>METAS DE MONETIZAÇÃO:</b>\n`
   telegram += `${statusEmoji[goals.status]} <b>${statusText[goals.status]}</b>\n\n`
-  telegram += `📊 <b>Seguidores:</b> ${goals.currentFollowers}/500\n`
-
   if (goals.status === 'achieved') {
-    telegram += `• ✅ Meta superada em ${Math.abs(goals.followersNeeded)}!\n`
+    telegram += `📊 <b>Seguidores:</b> ${goals.currentFollowers}\n`
+    telegram += `• ✅ Meta de 500 atingida!\n`
+    telegram += `• Verified: ${goals.verifiedFollowers}/2000 (próxima meta)\n`
     telegram += `• Hoje: ${goals.followerGain >= 0 ? '+' : ''}${goals.followerGain}\n`
-    telegram += `• Média/dia: ${goals.avgDailyGain >= 0 ? '+' : ''}${goals.avgDailyGain}\n`
-    telegram += `• 🎯 Próxima: ${goals.verifiedFollowers}/2000 verified\n`
   } else {
+    telegram += `📊 <b>Seguidores:</b> ${goals.currentFollowers}/500\n`
     telegram += `• Faltam: ${goals.followersNeeded}\n`
     telegram += `• Hoje: ${goals.followerGain >= 0 ? '+' : ''}${goals.followerGain}\n`
     telegram += `• Média/dia: ${goals.avgDailyGain >= 0 ? '+' : ''}${goals.avgDailyGain}\n`
