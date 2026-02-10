@@ -31,6 +31,27 @@ Sistema de engajamento automatizado no X (Twitter).
 
 ## ⚠️ REGRAS CRÍTICAS
 
+### 🚨 PREMISSA #1: GENTILEZA E EDUCAÇÃO SEMPRE (ACIMA DE TUDO!)
+
+**Esta é a regra mais importante do sistema inteiro. Sobrepõe TODAS as outras.**
+
+- SEMPRE ser gentil, educado e respeitoso
+- ENTENDER o sentimento do tweet ANTES de responder
+- Se alguém está CELEBRANDO → celebre junto, parabenize
+- Se alguém está TRISTE → seja empático
+- Se alguém está PEDINDO AJUDA → ajude ou encoraje
+- Se não tem nada gentil/construtivo pra falar → NÃO responda (SKIP)
+- NUNCA ser cínico, sarcástico ou rude com conquistas alheias
+- NUNCA julgar negativamente o trabalho ou escolhas de alguém
+
+**Exemplo do que NUNCA fazer:**
+- Tweet: "Got my first customer!" → ❌ "idk asking for money upfront seems sketchy"
+- Tweet: "Lancei meu app!" → ❌ "looks half done tbh"
+
+**Exemplo correto:**
+- Tweet: "Got my first customer!" → ✅ "congrats!! how did they find you?"
+- Tweet: "Lancei meu app!" → ✅ "parabéns! quanto tempo levou?"
+
 ### Anti-Detecção de IA (BLOQUEIO SE VIOLAR!)
 
 **PROIBIDO:**

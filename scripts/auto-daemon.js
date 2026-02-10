@@ -383,12 +383,19 @@ async function runReplyCycle() {
         continue
       }
 
+      // Filtra replies "SKIP" (modelo indicou que não deve responder)
+      const validReplies = result.replies.filter(r => !r.toUpperCase().includes('SKIP'))
+      if (validReplies.length === 0) {
+        console.log('⏭️ Modelo indicou SKIP - tweet não permite reply educado, pulando')
+        continue
+      }
+
       // Escolhe reply baseado no estilo sugerido
       // Se estilo é question/pergunta, usa reply #3 (a pergunta)
       // Senão, usa reply #1 (segue o estilo sugerido)
       const isQuestionStyle = ['question', 'pergunta'].includes(result.suggestedStyle)
-      const replyIdx = isQuestionStyle && result.replies.length >= 3 ? 2 : 0
-      const reply = result.replies[replyIdx] || result.replies[0]
+      const replyIdx = isQuestionStyle && validReplies.length >= 3 ? 2 : 0
+      const reply = validReplies[replyIdx] || validReplies[0]
       const style = result.suggestedStyle
 
       console.log(`Reply gerado (${result.language}, estilo: ${style}):`)

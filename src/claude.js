@@ -31,8 +31,8 @@ const STYLE_ROTATION = {
     { name: 'observation', hint: 'point out something specific you noticed', example: 'that 70k zone looking dangerous' },
     { name: 'question', hint: 'genuine curious question', example: 'when did this start happening?' },
     { name: 'disagree', hint: 'politely disagree or offer counter view', example: 'idk i think the opposite might happen' },
-    { name: 'contrarian', hint: 'take opposite stance with reason', example: 'everyone saying this but last time it dumped' },
-    { name: 'skeptic', hint: 'express doubt about the premise', example: 'feels like a trap setup' },
+    { name: 'contrarian', hint: 'take opposite stance on OPINIONS/PREDICTIONS only (never on personal wins)', example: 'everyone saying this but last time it dumped' },
+    { name: 'skeptic', hint: 'express doubt about a PREDICTION or HOT TAKE (never about personal achievements)', example: 'feels like a trap setup' },
     { name: 'add_context', hint: 'add missing info they didnt mention', example: 'worth noting funding rates are still negative' },
     { name: 'personal_take', hint: 'your own opinion/prediction', example: 'my bet is we sweep lows first' },
     { name: 'experience', hint: 'share what happened to you', example: 'got rekt last time i faded this signal' },
@@ -43,8 +43,8 @@ const STYLE_ROTATION = {
     { name: 'observação', hint: 'aponta algo específico', example: 'essa zona de 70k preocupa' },
     { name: 'pergunta', hint: 'pergunta genuína curiosa', example: 'desde quando ta assim?' },
     { name: 'discordo', hint: 'discorda educadamente', example: 'sei la acho q vai ser o contrario' },
-    { name: 'contrario', hint: 'visão oposta com razão', example: 'todo mundo falando isso mas ultima vez despencou' },
-    { name: 'cetico', hint: 'duvida da premissa', example: 'parece armadilha isso ai' },
+    { name: 'contrario', hint: 'visão oposta apenas para OPINIÃO/PREVISÃO (nunca para conquistas)', example: 'todo mundo falando isso mas ultima vez despencou' },
+    { name: 'cetico', hint: 'duvida de PREVISÕES ou HOT TAKES (nunca de conquistas pessoais)', example: 'parece armadilha isso ai' },
     { name: 'contexto', hint: 'adiciona info que faltou', example: 'funding ainda ta negativo ne' },
     { name: 'opiniao', hint: 'sua previsão/opinião própria', example: 'aposto q vai buscar fundo antes' },
     { name: 'experiencia', hint: 'compartilha o que aconteceu contigo', example: 'tomei no ** da ultima vez q ignorei isso' },
@@ -107,6 +107,41 @@ const REPLY_SYSTEM_PROMPT = `Você gera replies curtos que INICIAM CONVERSA.
 IMPORTANTE: Estamos em ${CURRENT_YEAR}. Se mencionar ano, use ${CURRENT_YEAR}.
 
 PERFIL: @${profile.x_username || 'user'} - ${(profile.expertise || []).join(', ')}
+${profile.core_premise ? `\n🚨 PREMISSA PRINCIPAL: ${profile.core_premise}` : ''}
+
+═══════════════════════════════════════════════════════════════════════════
+🚨 PREMISSA ABSOLUTA: GENTILEZA E EDUCAÇÃO SEMPRE
+═══════════════════════════════════════════════════════════════════════════
+
+Esta é a regra mais importante de TODAS. Sobrepõe qualquer outra regra.
+
+ANTES DE GERAR QUALQUER REPLY, entenda o SENTIMENTO do tweet:
+- A pessoa está CELEBRANDO algo? → Celebre junto! Parabenize!
+- A pessoa está DESABAFANDO/triste? → Seja empático e apoie
+- A pessoa está PEDINDO AJUDA? → Ajude ou encoraje
+- A pessoa está COMPARTILHANDO uma conquista? → Reconheça o esforço
+- A pessoa está fazendo um HOT TAKE/previsão? → Aí sim pode discordar educadamente
+
+PROIBIDO:
+❌ Ser cínico com conquistas alheias
+❌ Julgar negativamente escolhas pessoais
+❌ Fazer comentários sarcásticos sobre o trabalho de alguém
+❌ Duvidar de algo que a pessoa está feliz em compartilhar
+❌ "idk that seems sketchy" para alguém comemorando
+❌ Qualquer reply que a pessoa possa interpretar como ataque
+
+EXEMPLOS DE ERRO GRAVE (NUNCA faça isso):
+Tweet: "Finally got my first customer! 😭" → ❌ "idk asking for money upfront seems sketchy"
+Tweet: "Lancei meu primeiro app!" → ❌ "looks half done tbh"
+Tweet: "After 2 years I finally graduated" → ❌ "took you long enough"
+
+EXEMPLOS CORRETOS:
+Tweet: "Finally got my first customer! 😭" → ✅ "congrats!! how did they find you?"
+Tweet: "Lancei meu primeiro app!" → ✅ "parabéns! quanto tempo levou pra fazer?"
+Tweet: "After 2 years I finally graduated" → ✅ "that's huge, congrats! what's next?"
+
+SE NÃO CONSEGUIR dizer algo gentil ou construtivo → NÃO responda.
+Gere "SKIP" como reply se o tweet não permite uma resposta educada.
 
 ═══════════════════════════════════════════════════════════════════════════
 REGRA #1: INICIAR CONVERSA > DEMONSTRAR CONHECIMENTO
@@ -127,7 +162,7 @@ O QUE FUNCIONA (gera RESPOSTA do autor):
 ✅ "this is wild lol" (reação + humor)
 ✅ "isso ta tenso 😬" (reação curta)
 ✅ "how long did this take you?" (interesse na pessoa)
-✅ "idk i see it differently" (opinião contrária)
+✅ "idk i see it differently" (opinião contrária - APENAS para hot takes/previsões, NUNCA para conquistas)
 
 ═══════════════════════════════════════════════════════════════════════════
 REGRA #2: TAMANHO MÁXIMO 100 CARACTERES
